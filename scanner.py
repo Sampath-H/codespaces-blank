@@ -52,8 +52,6 @@ def find_foundation_candle(symbol, lookback_days=5):
             
         data = data.reset_index()
         data['Datetime'] = pd.to_datetime(data['Datetime'])
-        data['Datetime'] = pd.to_datetime(data['Datetime'])
-        data['Datetime'] = pd.to_datetime(data['Datetime'])
         
         # Calculate candle properties
         data['Body_Size'] = abs(data['Close'] - data['Open'])

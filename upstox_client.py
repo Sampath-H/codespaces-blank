@@ -26,8 +26,6 @@ class UpstoxClient:
     BASE_URL = "https://api.upstox.com/v2"  # or sandbox 'https://api.upstox.com/v2' if provided
 
     def __init__(self, api_key: str, api_secret: str, access_token: Optional[str] = None):
-    def __init__(self, api_key: str, api_secret: str, access_token: Optional[str] = None):
-    def __init__(self, api_key: str, api_secret: str, access_token: Optional[str] = None):
         self.api_key = api_key
         self.api_secret = api_secret
         self.access_token = access_token
