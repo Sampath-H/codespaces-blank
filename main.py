@@ -27,12 +27,15 @@ import os
 import yfinance as yf
 from datetime import datetime, timedelta, date
 
+import pytz
+
 # ---------------------------------------------------------------------------
 # Backtesting Engine
 # ---------------------------------------------------------------------------
 def get_historical_market_days(lookback_selection):
     """Calculate the start and end dates based on the dropdown selection, skipping weekends."""
-    today = datetime.now()
+    ist = pytz.timezone('Asia/Kolkata')
+    today = datetime.now(ist)
     end_date = today
     
     if lookback_selection == "Today":
@@ -64,7 +67,8 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     start_time, end_time = get_historical_market_days(lookback)
     
     # Dates for Upstox (YYYY-MM-DD)
-    start_str = (start_time - timedelta(days=10)).strftime("%Y-%m-%d") # padding for MAs
+    # Pad by 30 days so long MAs (e.g. 200 EMA) can calculate before the simulation starts!
+    start_str = (start_time - timedelta(days=30)).strftime("%Y-%m-%d")
     end_str = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
     
     # Map timeframe
@@ -96,10 +100,16 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             candles = resp['data']['candles'][::-1]
             df = pd.DataFrame(candles, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'OI'])
             
-            # Convert timezone
+            # Convert timezone safely
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df.set_index('timestamp', inplace=True)
-            df.index = df.index.tz_convert('Asia/Kolkata') if df.index.tz else df.index.tz_localize('Asia/Kolkata')
+            
+            # If the index already has timezone info (like +05:30), just convert its representation to Asia/Kolkata
+            # If it's timezone-naive, assume it is ALREADY IST (because Upstox mock/real API returns IST), so just localize it
+            if df.index.tz is not None:
+                df.index = df.index.tz_convert('Asia/Kolkata')
+            else:
+                df.index = df.index.tz_localize('Asia/Kolkata')
             
             # Convert cols to float
             for col in ['Open', 'High', 'Low', 'Close']:

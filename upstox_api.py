@@ -218,11 +218,22 @@ class UpstoxClient:
             import yfinance as yf
             import pandas as pd
             # Fallback to yfinance for Spot if possible, otherwise return empty
+            ticker = ""
             if "Nifty 50" in instrument_key: ticker = "^NSEI"
             elif "Nifty Bank" in instrument_key: ticker = "^NSEBANK"
+            elif "SENSEX" in instrument_key: ticker = "^BSESN"
+            elif "NSE_EQ|" in instrument_key: ticker = instrument_key.split("|")[1] + ".NS"
             else: return {"status": "error", "message": "Cannot mock historical options chain without active token."}
             
             yf_interval = "1m" if "minute" in interval else "1d"
+            
+            # Yfinance has strict 7-day limits for 1m data. Clamp the from_date if necessary to avoid returning empty DF
+            if yf_interval == "1m":
+                from datetime import datetime, timedelta
+                seven_days_ago = (datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d")
+                if from_date < seven_days_ago:
+                    from_date = seven_days_ago
+                    
             df = yf.download(ticker, start=from_date, end=to_date, interval=yf_interval, progress=False, auto_adjust=True)
             if df.empty: return {"status": "success", "data": {"candles": []}}
             
