@@ -7,6 +7,21 @@ import base64
 import os
 from email_alert import send_email_alert
 
+def calculate_ema(data, column='Close', period=9):
+    """Calculate Exponential Moving Average (EMA)"""
+    return data[column].ewm(span=period, adjust=False).mean()
+
+def calculate_sma(data, column='Close', period=9):
+    """Calculate Simple Moving Average (SMA)"""
+    return data[column].rolling(window=period).mean()
+
+def calculate_vwap(data):
+    """Calculate Volume Weighted Average Price (VWAP)"""
+    if 'Volume' not in data.columns:
+        return None
+    data['vwap'] = (data['Close'] * data['Volume']).rolling(window=20).sum() / data['Volume'].rolling(window=20).sum()
+    return data['vwap']
+
 def get_weekdays_since_friday(friday_date):
     """Return a list of weekdays (dates) since the given Friday up to today (excluding weekends)."""
     today = datetime.now().date()
@@ -52,6 +67,8 @@ def find_foundation_candle(symbol, lookback_days=5):
             
         data = data.reset_index()
         data['Datetime'] = pd.to_datetime(data['Datetime'])
+        data['Datetime'] = pd.to_datetime(data['Datetime'])
+        data['Datetime'] = pd.to_datetime(data['Datetime'])
         
         # Calculate candle properties
         data['Body_Size'] = abs(data['Close'] - data['Open'])
@@ -82,9 +99,15 @@ def find_foundation_candle(symbol, lookback_days=5):
         print(f"Error processing {symbol}: {e}")
         return None
 
-def scan_foundation_candle_returns(symbols):
+def scan_foundation_candle_returns(symbols, entry_ma_length=9, exit_ma_length=21, ma_type='EMA'):
     """
     Scan for foundation candle returns: stocks that have returned to the foundation candle zone.
+    
+    Args:
+        symbols: List of symbols to scan
+        entry_ma_length: Period for entry moving average
+        exit_ma_length: Period for exit moving average
+        ma_type: Type of moving average ('EMA', 'SMA', 'VWAP')
     """
     results = []
     for symbol in symbols:
@@ -100,6 +123,17 @@ def scan_foundation_candle_returns(symbols):
                 continue
             
             current_price = current_data['Close'].iloc[-1]
+            
+            # Calculate moving averages
+            if ma_type == 'EMA':
+                entry_ma = calculate_ema(current_data, period=entry_ma_length).iloc[-1]
+                exit_ma = calculate_ema(current_data, period=exit_ma_length).iloc[-1]
+            elif ma_type == 'SMA':
+                entry_ma = calculate_sma(current_data, period=entry_ma_length).iloc[-1]
+                exit_ma = calculate_sma(current_data, period=exit_ma_length).iloc[-1]
+            else:
+                entry_ma = current_price
+                exit_ma = current_price
             
             # Check if price has returned to foundation zone
             foundation_high = foundation['High']
@@ -119,6 +153,8 @@ def scan_foundation_candle_returns(symbols):
                     'Foundation Low': round(foundation_low, 2),
                     'Foundation Close': round(foundation_close, 2),
                     'Current Price': round(current_price, 2),
+                    'Entry MA': round(entry_ma, 2),
+                    'Exit MA': round(exit_ma, 2),
                     'Rally %': round(rally_percentage, 2),
                     'Setup Type': 'Bullish Return' if rally_percentage > 0 else 'Bearish Return'
                 })
@@ -127,9 +163,15 @@ def scan_foundation_candle_returns(symbols):
             continue
     return pd.DataFrame(results)
 
-def scan_friday_breakout(symbols):
+def scan_friday_breakout(symbols, entry_ma_length=9, exit_ma_length=21, ma_type='EMA'):
     """
     Scan for Friday breakout patterns.
+    
+    Args:
+        symbols: List of symbols to scan
+        entry_ma_length: Period for entry moving average
+        exit_ma_length: Period for exit moving average
+        ma_type: Type of moving average ('EMA', 'SMA', 'VWAP')
     """
     results = []
     last_friday = get_last_friday()
@@ -151,6 +193,17 @@ def scan_friday_breakout(symbols):
             
             current_price = current_data['Close'].iloc[-1]
             
+            # Calculate moving averages
+            if ma_type == 'EMA':
+                entry_ma = calculate_ema(current_data, period=entry_ma_length).iloc[-1]
+                exit_ma = calculate_ema(current_data, period=exit_ma_length).iloc[-1]
+            elif ma_type == 'SMA':
+                entry_ma = calculate_sma(current_data, period=entry_ma_length).iloc[-1]
+                exit_ma = calculate_sma(current_data, period=exit_ma_length).iloc[-1]
+            else:
+                entry_ma = current_price
+                exit_ma = current_price
+            
             # Check for breakout
             if current_price > friday_high:
                 results.append({
@@ -158,6 +211,8 @@ def scan_friday_breakout(symbols):
                     'Friday High': round(friday_high, 2),
                     'Friday Low': round(friday_low, 2),
                     'Current Price': round(current_price, 2),
+                    'Entry MA': round(entry_ma, 2),
+                    'Exit MA': round(exit_ma, 2),
                     'Breakout %': round(((current_price - friday_high) / friday_high) * 100, 2),
                     'Setup Type': 'Bullish Breakout'
                 })
@@ -167,6 +222,8 @@ def scan_friday_breakout(symbols):
                     'Friday High': round(friday_high, 2),
                     'Friday Low': round(friday_low, 2),
                     'Current Price': round(current_price, 2),
+                    'Entry MA': round(entry_ma, 2),
+                    'Exit MA': round(exit_ma, 2),
                     'Breakout %': round(((friday_low - current_price) / friday_low) * 100, 2),
                     'Setup Type': 'Bearish Breakdown'
                 })
@@ -175,9 +232,15 @@ def scan_friday_breakout(symbols):
             continue
     return pd.DataFrame(results)
 
-def scan_monthly_marubozu(symbols):
+def scan_monthly_marubozu(symbols, entry_ma_length=9, exit_ma_length=21, ma_type='EMA'):
     """
     Scan for monthly Marubozu patterns.
+    
+    Args:
+        symbols: List of symbols to scan
+        entry_ma_length: Period for entry moving average
+        exit_ma_length: Period for exit moving average
+        ma_type: Type of moving average ('EMA', 'SMA', 'VWAP')
     """
     results = []
     
@@ -206,6 +269,17 @@ def scan_monthly_marubozu(symbols):
                 
                 current_price = current_data['Close'].iloc[-1]
                 
+                # Calculate moving averages
+                if ma_type == 'EMA':
+                    entry_ma = calculate_ema(current_data, period=entry_ma_length).iloc[-1]
+                    exit_ma = calculate_ema(current_data, period=exit_ma_length).iloc[-1]
+                elif ma_type == 'SMA':
+                    entry_ma = calculate_sma(current_data, period=entry_ma_length).iloc[-1]
+                    exit_ma = calculate_sma(current_data, period=exit_ma_length).iloc[-1]
+                else:
+                    entry_ma = current_price
+                    exit_ma = current_price
+                
                 # Calculate retracement or rally
                 marubozu_close = recent_month['Close']
                 change_percentage = ((current_price - marubozu_close) / marubozu_close) * 100
@@ -218,6 +292,8 @@ def scan_monthly_marubozu(symbols):
                     'Marubozu Low': round(recent_month['Low'], 2),
                     'Marubozu Close': round(marubozu_close, 2),
                     'Current Price': round(current_price, 2),
+                    'Entry MA': round(entry_ma, 2),
+                    'Exit MA': round(exit_ma, 2),
                     'Change %': round(change_percentage, 2),
                     'Setup Type': 'Bullish Marubozu' if recent_month['Close'] > recent_month['Open'] else 'Bearish Marubozu'
                 })

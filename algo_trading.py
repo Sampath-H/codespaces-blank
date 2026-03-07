@@ -125,7 +125,64 @@ def display_algo_trading_page():
     
     # Strategy Execution
     st.markdown("---")
-    st.subheader("⚙️ Strategy Execution")
+    st.subheader("⚙️ Strategy Parameters")
+    
+    # Strategy Parameters UI (similar to Upstox screenshot)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Order Type**")
+        order_type_param = st.radio(
+            "Select Order Type",
+            ["MIS", "CNC", "BTST"],
+            key="order_type_param",
+            horizontal=True
+        )
+    
+    with col2:
+        st.write("**Start Time**")
+        start_time = st.time_input("Trading Start Time", value=datetime.min.time(), key="start_time")
+    
+    st.markdown("---")
+    
+    # Moving Average Parameters
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write("**Entry Conditions**")
+        entry_indicator = st.selectbox(
+            "Entry Indicator",
+            ["Moving Average", "EMA", "SMA", "VWAP"],
+            key="entry_indicator"
+        )
+        entry_ma_length = st.slider(
+            "Entry MA Length",
+            min_value=1,
+            max_value=200,
+            value=9,
+            step=1,
+            key="entry_ma_length"
+        )
+    
+    with col2:
+        st.write("**Exit Conditions**")
+        exit_indicator = st.selectbox(
+            "Exit Indicator",
+            ["Moving Average", "EMA", "SMA", "Trailing Stop"],
+            key="exit_indicator"
+        )
+        exit_ma_length = st.slider(
+            "Exit MA Length",
+            min_value=1,
+            max_value=200,
+            value=21,
+            step=1,
+            key="exit_ma_length"
+        )
+    
+    st.markdown("---")
+    
+    # Strategy Execution
     
     # Stock Universe for Strategy
     strategy_universe = st.selectbox(
@@ -161,12 +218,30 @@ def display_algo_trading_page():
             st.error("No symbols available for strategy")
         else:
             with st.spinner("Scanning for setups..."):
+                # Determine MA type from entry indicator
+                ma_type = entry_indicator if entry_indicator in ['EMA', 'SMA', 'VWAP'] else 'EMA'
+                
                 if strategy_type == "Foundation Candle Returns":
-                    setups = scan_foundation_candle_returns(symbols)
+                    setups = scan_foundation_candle_returns(
+                        symbols, 
+                        entry_ma_length=entry_ma_length,
+                        exit_ma_length=exit_ma_length,
+                        ma_type=ma_type
+                    )
                 elif strategy_type == "Friday Breakout":
-                    setups = scan_friday_breakout(symbols)
+                    setups = scan_friday_breakout(
+                        symbols,
+                        entry_ma_length=entry_ma_length,
+                        exit_ma_length=exit_ma_length,
+                        ma_type=ma_type
+                    )
                 elif strategy_type == "Monthly Marubozu":
-                    setups = scan_monthly_marubozu(symbols)
+                    setups = scan_monthly_marubozu(
+                        symbols,
+                        entry_ma_length=entry_ma_length,
+                        exit_ma_length=exit_ma_length,
+                        ma_type=ma_type
+                    )
             
             if setups.empty:
                 st.warning("No setups found")
