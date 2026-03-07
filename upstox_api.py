@@ -143,10 +143,7 @@ class UpstoxClient:
     def get_positions(self) -> Any:
         """Retrieve the current margin positions for the account."""
         if self.access_token == "MOCK_TOKEN_FOR_TESTING":
-            return [
-                {"symbol": "RELIANCE", "quantity": 10, "buy_price": 2500, "sell_price": 0, "net_price": 2500},
-                {"symbol": "SBIN", "quantity": 50, "buy_price": 600, "sell_price": 0, "net_price": 600}
-            ]
+            return []
         # positions endpoint under v2
         resp = self.session.get(self._url("/portfolio/positions"))
         resp.raise_for_status()
