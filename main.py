@@ -54,45 +54,58 @@ def get_historical_market_days(lookback_selection):
         
     return start_date, end_date
 
-def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback, timeframe="5m"):
+def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback, timeframe="5m", enable_options=False, opt_type=None, expiry_type=None, strike_selection=None):
     """
     Simulates the strategy over the specified period and timeframe.
     Returns a dataframe of closed trades and summary metrics.
     """
+    from upstox_api import UpstoxClient, PaperUpstoxClient
+    
     start_time, end_time = get_historical_market_days(lookback)
     
-    # Enforce yfinance limits
-    if timeframe == "1m":
-        max_start = datetime.now() - timedelta(days=7)
-        if start_time < max_start: start_time = max_start
-    elif timeframe in ["5m", "15m"]:
-        max_start = datetime.now() - timedelta(days=60)
-        if start_time < max_start: start_time = max_start
+    # Dates for Upstox (YYYY-MM-DD)
+    start_str = (start_time - timedelta(days=10)).strftime("%Y-%m-%d") # padding for MAs
+    end_str = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
     
-    # yfinance needs slightly adjusted dates for historical fetching
-    yf_start = (start_time - timedelta(days=10)).strftime("%Y-%m-%d") # extra days for MA calc
-    yf_end = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
+    # Map timeframe
+    upstox_tf = "1minute" if timeframe == "1m" else "5minute" if timeframe == "5m" else "15minute" if timeframe == "15m" else "30minute" if timeframe == "30m" else "day"
+    
+    # Initialize Upstox Client (using Paper client for simulation since it falls back to yfinance when no active token, but can hit real api if logged in)
+    api_key = st.session_state.get("api_key", "")
+    api_secret = st.session_state.get("api_secret", "")
+    access_token = st.session_state.get("access_token", "MOCK_TOKEN_FOR_TESTING")
+    
+    client = PaperUpstoxClient(api_key, api_secret, access_token)
     
     all_trades = []
     
     for symbol in symbols:
         try:
-            # Fetch data with specified timeframe
-            df = yf.download(symbol, start=yf_start, end=yf_end, interval=timeframe, progress=False, auto_adjust=True)
-            if df.empty: continue
-                
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = [col[0] for col in df.columns]
-                
-            # Convert timezone to Indian Standard Time (IST)
-            if df.index.tz is None:
-                df.index = df.index.tz_localize('UTC').tz_convert('Asia/Kolkata')
+            # 1. FETCH SPOT DATA
+            if enable_options and "NIFTY" in symbol:
+                instrument = f"NSE_INDEX|Nifty 50" if symbol == "NIFTY" else f"NSE_INDEX|Nifty Bank" if symbol == "BANKNIFTY" else f"BSE_INDEX|SENSEX"
             else:
-                df.index = df.index.tz_convert('Asia/Kolkata')
+                instrument = symbol if "|" in symbol else f"NSE_EQ|{symbol.replace('.NS', '')}"
                 
-            # Filter to Indian Market Hours (9:15 to 15:30)
+            resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
             
-            # Calculate MAs
+            if resp.get('status') != 'success' or not resp['data']['candles']:
+                continue
+                
+            # Upstox returns oldest last. Reverse it so chronological.
+            candles = resp['data']['candles'][::-1]
+            df = pd.DataFrame(candles, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'OI'])
+            
+            # Convert timezone
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df.set_index('timestamp', inplace=True)
+            df.index = df.index.tz_convert('Asia/Kolkata') if df.index.tz else df.index.tz_localize('Asia/Kolkata')
+            
+            # Convert cols to float
+            for col in ['Open', 'High', 'Low', 'Close']:
+                df[col] = df[col].astype(float)
+            
+            # 2. RUN INDICATORS ON SPOT DATA
             if ma_type == "EMA":
                 df['fast_ma'] = df['Close'].ewm(span=fast_ma, adjust=False).mean()
                 df['slow_ma'] = df['Close'].ewm(span=slow_ma, adjust=False).mean()
@@ -102,7 +115,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                 
             df.dropna(inplace=True)
             
-            # Cut down to just the strictly requested lookback date range now that MAs are calculated
+            # Filter strictly to simulation window
             df = df[df.index.date >= start_time.date()]
             if df.empty: continue
             
@@ -113,72 +126,150 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             target = 0
             sl = 0
             
+            # Options specific
+            lot_size = 1
+            option_symbol = ""
+            premium_df = None
+            
+            # 3. RUN SIMULATION LOOP
             for i in range(1, len(df)):
                 current = df.iloc[i]
                 prev = df.iloc[i-1]
                 
-                # If we are not in a position, look for a crossover
+                # A) NOT IN POSITION -> LOOK FOR ENTRY ON SPOT
                 if not in_position:
-                    # Golden Cross (Buy / Long Entry)
+                    # Check Golden Cross vs Death Cross on Spot
+                    signal = ""
                     if current['fast_ma'] > current['slow_ma'] and prev['fast_ma'] <= prev['slow_ma']:
-                        in_position = True
-                        trade_side = "BUY"
-                        entry_price = round(float(current['Close']), 2)
-                        entry_time = df.index[i]
-                        target = entry_price * (1 + (target_pct / 100))
-                        sl = entry_price * (1 - (sl_pct / 100))
-                        
-                    # Death Cross (Sell / Short Entry)
+                        signal = "BUY"
                     elif current['fast_ma'] < current['slow_ma'] and prev['fast_ma'] >= prev['slow_ma']:
+                        signal = "SELL"
+                        
+                    if signal:
                         in_position = True
-                        trade_side = "SELL"
-                        entry_price = round(float(current['Close']), 2)
                         entry_time = df.index[i]
-                        target = entry_price * (1 - (target_pct / 100)) # Target is lower for shorts
-                        sl = entry_price * (1 + (sl_pct / 100)) # SL is higher for shorts
+                        spot_price = float(current['Close'])
+                        
+                        if enable_options:
+                            # Resolve the Option Contract!
+                            st.toast(f"Resolving Option Contract for {symbol} at Spot ₹{spot_price}...")
+                            opt_data = client.resolve_options_contract(symbol, spot_price, entry_time, expiry_type, opt_type, strike_selection)
+                            
+                            if not opt_data:
+                                st.warning(f"Could not resolve option contract for {symbol} on {entry_time.date()}")
+                                in_position = False
+                                continue
+                                
+                            option_symbol = opt_data['trading_symbol']
+                            lot_size = opt_data['lot_size']
+                            
+                            # Fetch 1m Premium History for exact execution
+                            prem_resp = client.get_historical_candle(opt_data['instrument_token'], "1minute", end_str, entry_time.strftime("%Y-%m-%d"))
+                            if prem_resp.get('status') == 'success' and prem_resp['data']['candles']:
+                                p_candles = prem_resp['data']['candles'][::-1]
+                                premium_df = pd.DataFrame(p_candles, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'OI'])
+                                premium_df['timestamp'] = pd.to_datetime(premium_df['timestamp'])
+                                premium_df.set_index('timestamp', inplace=True)
+                                
+                                # Find premium at exact entry time
+                                entry_idx = premium_df[premium_df.index >= entry_time]
+                                if not entry_idx.empty:
+                                    entry_price = float(entry_idx.iloc[0]['Close'])
+                                else:
+                                    entry_price = float(premium_df.iloc[-1]['Close'])
+                            else:
+                                st.warning(f"No historical premium data available for {option_symbol}")
+                                in_position = False
+                                continue
+                                
+                            # Since we buy an Option, we always go LONG on the premium!
+                            trade_side = "BUY"
+                            target = entry_price * (1 + (target_pct / 100))
+                            sl = entry_price * (1 - (sl_pct / 100))
+                            
+                        else:
+                            # Standard Spot Equity execution
+                            trade_side = signal
+                            entry_price = round(spot_price, 2)
+                            lot_size = 1
+                            option_symbol = symbol
+                            
+                            if trade_side == "BUY":
+                                target = entry_price * (1 + (target_pct / 100))
+                                sl = entry_price * (1 - (sl_pct / 100))
+                            else:
+                                target = entry_price * (1 - (target_pct / 100))
+                                sl = entry_price * (1 + (sl_pct / 100))
                 
-                # If we are in a position, check if Target or SL hit
+                # B) IN POSITION -> CHECK FOR EXIT
                 else:
-                    high = float(current['High'])
-                    low = float(current['Low'])
-                    
                     exit_price = 0
                     reason = ""
+                    exit_time = current.name
                     
-                    if trade_side == "BUY":
-                        if high >= target:
-                            exit_price = round(target, 2)
-                            reason = "Target Hit"
-                        elif low <= sl:
-                            exit_price = round(sl, 2)
-                            reason = "Stop Loss Hit"
-                    else: # SELL
-                        if low <= target:
-                            exit_price = round(target, 2)
-                            reason = "Target Hit"
-                        elif high >= sl:
-                            exit_price = round(sl, 2)
-                            reason = "Stop Loss Hit"
+                    if enable_options and premium_df is not None:
+                        # Scan 1-min premium chart from entry time to current loop time
+                        active_premiums = premium_df[(premium_df.index > entry_time) & (premium_df.index <= current.name)]
+                        for p_idx, p_row in active_premiums.iterrows():
+                            high = float(p_row['High'])
+                            low = float(p_row['Low'])
+                            
+                            if high >= target:
+                                exit_price = round(target, 2)
+                                reason = "Target Hit"
+                                exit_time = p_idx
+                                break
+                            elif low <= sl:
+                                exit_price = round(sl, 2)
+                                reason = "Stop Loss Hit"
+                                exit_time = p_idx
+                                break
+                    else:
+                        # Standard Equity scan
+                        high = float(current['High'])
+                        low = float(current['Low'])
                         
-                    # Force exit at 15:25 (Intraday Square-off) if timeframe is intraday
-                    if "m" in timeframe or "h" in timeframe:
+                        if trade_side == "BUY":
+                            if high >= target:
+                                exit_price = round(target, 2)
+                                reason = "Target Hit"
+                            elif low <= sl:
+                                exit_price = round(sl, 2)
+                                reason = "Stop Loss Hit"
+                        else: # SELL
+                            if low <= target:
+                                exit_price = round(target, 2)
+                                reason = "Target Hit"
+                            elif high >= sl:
+                                exit_price = round(sl, 2)
+                                reason = "Stop Loss Hit"
+                        
+                    # Force Intraday exit
+                    if "minute" in upstox_tf:
                         if current.name.hour == 15 and current.name.minute >= 25:
-                            exit_price = round(float(current['Close']), 2)
-                            reason = "EOD Square-off"
+                            if exit_price == 0: # Not hit yet
+                                if enable_options and premium_df is not None:
+                                    last_p = premium_df[premium_df.index <= current.name]
+                                    exit_price = round(float(last_p.iloc[-1]['Close']), 2) if not last_p.empty else entry_price
+                                else:
+                                    exit_price = round(float(current['Close']), 2)
+                                reason = "EOD Square-off"
+                                exit_time = current.name
                         
                     if exit_price > 0:
                         if trade_side == "BUY":
-                            pnl = round(exit_price - entry_price, 2)
+                            pnl = round((exit_price - entry_price) * lot_size, 2)
                         else:
-                            pnl = round(entry_price - exit_price, 2)
+                            pnl = round((entry_price - exit_price) * lot_size, 2)
                             
-                        pnl_pct = round((pnl / entry_price) * 100, 2)
+                        pnl_pct = round((pnl / (entry_price * lot_size)) * 100, 2)
                         
                         all_trades.append({
-                            "Symbol": symbol,
+                            "Symbol": option_symbol,
                             "Side": trade_side,
                             "Entry Time": entry_time.strftime("%Y-%m-%d %H:%M"),
-                            "Exit Time": current.name.strftime("%Y-%m-%d %H:%M"),
+                            "Exit Time": exit_time.strftime("%Y-%m-%d %H:%M"),
+                            "Lot Size": lot_size,
                             "Entry Price": entry_price,
                             "Exit Price": exit_price,
                             "Reason": reason,
@@ -188,6 +279,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                         in_position = False
                         
         except Exception as e:
+            st.error(f"Error backtesting {symbol}: {e}")
             continue
             
     return pd.DataFrame(all_trades)
@@ -878,18 +970,38 @@ def display_backtest_page():
         st.markdown("**Risk Management**")
         tp_pct = st.number_input("Target Profit (%)", 0.1, 10.0, 2.0, step=0.1)
         sl_pct = st.number_input("Stop Loss (%)", 0.1, 10.0, 1.0, step=0.1)
+        st.markdown("**Options Strategy (Indices Only)**")
+        enable_options = st.checkbox("Trade Options instead of Spot", value=False)
         
+        if enable_options:
+            ecnt1, ecnt2 = st.columns(2)
+            with ecnt1:
+                opt_type = st.selectbox("Option Type", ["CE", "PE"])
+                expiry_type = st.selectbox("Expiry", ["Weekly", "Monthly"])
+            with ecnt2:
+                # 0 = ATM, -1 = 1 OTM (Call), +1 = 1 ITM (Call)
+                strike_selection = st.selectbox(
+                    "Strike Selection", 
+                    options=[-3, -2, -1, 0, 1, 2, 3],
+                    format_func=lambda x: "ATM" if x == 0 else (f"{abs(x)} ITM" if x > 0 else f"{abs(x)} OTM"),
+                    index=3
+                )
+        else:
+            opt_type, expiry_type, strike_selection = None, None, None
+            
         run_btn = st.button("▶️ Run Backtest", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        # Stock Universe for Strategy
         strategy_universe = st.selectbox(
             "Backtest Universe",
-            ["Nifty 500", "F&O Stocks", "Custom"],
+            ["Nifty 500", "F&O Stocks", "Indices", "Custom"],
+            index=2 if enable_options else 0,
             key="backtest_universe"
         )
         
-        if strategy_universe == "Custom":
+        if strategy_universe == "Indices":
+            symbols = ["NIFTY", "BANKNIFTY", "SENSEX"]
+        elif strategy_universe == "Custom":
             symbols_str = st.text_area("Stock Universe (comma separated)", "RELIANCE.NS, SBIN.NS, TCS.NS", height=100)
             symbols = [s.strip() for s in symbols_str.split(",")]
         else:
@@ -910,7 +1022,10 @@ def display_backtest_page():
     with col2:
         if run_btn:
             with st.spinner(f"Simulating {timeframe} Trades for {lookback}..."):
-                results_df = run_backtest(symbols, strategy, fast_len, slow_len, ma_type, tp_pct, sl_pct, lookback, timeframe)
+                results_df = run_backtest(
+                    symbols, strategy, fast_len, slow_len, ma_type, tp_pct, sl_pct, lookback, timeframe,
+                    enable_options, opt_type, expiry_type, strike_selection
+                )
                 
             if results_df.empty:
                 st.warning(f"No completed trades found during {lookback}.")
@@ -921,8 +1036,12 @@ def display_backtest_page():
                 win_rate = round((winners / total_trades) * 100, 2)
                 total_pnl = round(results_df['P&L (₹)'].sum(), 2)
                 
-                # To calculate real Total P&L %, we sum all PNL and divide by the sum of all Entry Prices
-                total_entry_cost = results_df['Entry Price'].sum()
+                # To calculate real Total P&L %, we sum all PNL and divide by the sum of all Entry Prices (factoring lot size)
+                if 'Lot Size' in results_df.columns:
+                    total_entry_cost = (results_df['Entry Price'] * results_df['Lot Size']).sum()
+                else:
+                    total_entry_cost = results_df['Entry Price'].sum()
+                    
                 total_pnl_pct = round((total_pnl / total_entry_cost) * 100, 2) if total_entry_cost > 0 else 0
                 
                 # Summary Dashboard
@@ -937,7 +1056,7 @@ def display_backtest_page():
                 else:
                     st.error(f"**Gross Strategy P&L:** ₹{total_pnl}   |   **Total P&L %:** {total_pnl_pct}%")
                 
-                st.markdown("#### Trade Log")
+                st.markdown("#### Detailed Trade Log")
                 
                 # Apply green/red styling to dataframe P&L
                 def color_pnl(val):

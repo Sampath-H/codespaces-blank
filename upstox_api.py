@@ -204,6 +204,116 @@ class UpstoxClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_historical_candle(self, instrument_key: str, interval: str, to_date: str, from_date: str) -> Any:
+        """Fetch historical candle data for a specific instrument.
+        
+        Args:
+            instrument_key: e.g. 'NSE_INDEX|Nifty 50' or 'NSE_FO|12345'
+            interval: '1minute', '30minute', 'day', etc.
+            to_date: 'YYYY-MM-DD'
+            from_date: 'YYYY-MM-DD'
+        """
+        # Mock for paper trading / local testing without token
+        if self.access_token == "MOCK_TOKEN_FOR_TESTING":
+            import yfinance as yf
+            import pandas as pd
+            # Fallback to yfinance for Spot if possible, otherwise return empty
+            if "Nifty 50" in instrument_key: ticker = "^NSEI"
+            elif "Nifty Bank" in instrument_key: ticker = "^NSEBANK"
+            else: return {"status": "error", "message": "Cannot mock historical options chain without active token."}
+            
+            yf_interval = "1m" if "minute" in interval else "1d"
+            df = yf.download(ticker, start=from_date, end=to_date, interval=yf_interval, progress=False, auto_adjust=True)
+            if df.empty: return {"status": "success", "data": {"candles": []}}
+            
+            candles = []
+            for idx, row in df.iterrows():
+                # [timestamp, open, high, low, close, volume, oi]
+                candles.append([
+                    idx.strftime("%Y-%m-%dT%H:%M:%S+05:30"),
+                    row['Open'], row['High'], row['Low'], row['Close'], row.get('Volume', 0), 0
+                ])
+            return {"status": "success", "data": {"candles": candles[::-1]}} # Upstox returns newest first
+            
+        url = self._url(f"/historical-candle/{instrument_key}/{interval}/{to_date}/{from_date}")
+        resp = self.session.get(url)
+        try:
+            resp.raise_for_status()
+            return resp.json()
+        except requests.HTTPError as e:
+            print(f"Historical API Error: {resp.text}")
+            return {"status": "error", "data": {"candles": []}}
+            
+    def resolve_options_contract(self, underlying: str, spot_price: float, trade_date: datetime, expiry_type: str="Weekly", option_type: str="CE", strike_offset: int=0) -> Optional[dict]:
+        """
+        Resolves the exact Option Contract based on Spot Price and Date.
+        
+        Args:
+            underlying: "NIFTY", "BANKNIFTY", "SENSEX"
+            spot_price: The triggering spot price (e.g. 24500)
+            trade_date: The datetime of the trigger
+            expiry_type: "Weekly" or "Monthly"
+            option_type: "CE" or "PE"
+            strike_offset: 0 = ATM. -1 = 1 OTM (Call), +1 = 1 ITM (Call). 
+        
+        Returns:
+            Dict containing {'instrument_token': str, 'lot_size': int} or None
+        """
+        import pandas as pd
+        import io
+        import requests
+        
+        # 1. Fetch the master instrument list from Upstox (cached in memory ideally, but fetching for simplicity here)
+        try:
+            csv_url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.csv.gz"
+            master_df = pd.read_csv(csv_url, compression='gzip')
+        except Exception as e:
+            print(f"Failed to fetch Upstox Master Instruments: {e}")
+            return None
+            
+        # 2. Filter for FO options on the underlying
+        fo_df = master_df[(master_df['instrument_type'] == 'OPTIDX') & (master_df['name'] == underlying)].copy()
+        if fo_df.empty:
+            return None
+            
+        # 3. Calculate target Strike Price
+        step_size = 50 if underlying == "NIFTY" else 100
+        atm_strike = round(spot_price / step_size) * step_size
+        target_strike = atm_strike + (strike_offset * step_size)
+        
+        # 4. Filter by Call/Put and Strike
+        matching_strikes = fo_df[(fo_df['strike'] == target_strike) & (fo_df['option_type'] == option_type)].copy()
+        if matching_strikes.empty:
+            return None
+            
+        # 5. Handle Expiries
+        matching_strikes['expiry_date'] = pd.to_datetime(matching_strikes['expiry'])
+        future_expiries = matching_strikes[matching_strikes['expiry_date'].dt.date >= trade_date.date()].copy()
+        
+        if future_expiries.empty:
+            return None
+            
+        # Sort by expiry date ascending
+        future_expiries = future_expiries.sort_values('expiry_date')
+        
+        if expiry_type == "Monthly":
+            # Rough approximation: Find the last expiry of the current month, or roll to next.
+            current_month = trade_date.month
+            monthly_opts = future_expiries[future_expiries['expiry_date'].dt.month == current_month]
+            if not monthly_opts.empty:
+                selected_contract = monthly_opts.iloc[-1] # Last expiry of the month
+            else:
+                selected_contract = future_expiries.iloc[0] # Fallback to nearest if month passed
+        else: # Weekly
+            # Closest upcoming expiry
+            selected_contract = future_expiries.iloc[0]
+            
+        return {
+            "instrument_token": selected_contract['instrument_key'],
+            "lot_size": int(selected_contract['lot_size']),
+            "trading_symbol": selected_contract['tradingsymbol']
+        }
+
     def place_order(
         self,
         symbol: str,
