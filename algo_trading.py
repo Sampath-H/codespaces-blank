@@ -218,7 +218,7 @@ def display_algo_trading_page():
     
     col1, col2 = st.columns(2)
     with col1:
-        ohlc_symbols = st.text_input("Instrument Keys (comma-separated)", value="NSE_EQ|INE002A01018", help="Example: NSE_EQ|INE002A01018 (Reliance)")
+        ohlc_symbols = st.text_input("Symbols (comma-separated)", value="RELIANCE.NS, SBIN.NS", help="Example: RELIANCE.NS, SBIN.NS")
     with col2:
         ohlc_interval = st.selectbox("Interval", ["1d", "I1", "I30"], help="1d: Daily (returns live_ohlc), I1: 1-min, I30: 30-min")
         
@@ -276,7 +276,7 @@ def display_algo_trading_page():
         
         col1, col2 = st.columns([3, 1])
         with col1:
-            ws_symbols = st.text_input("Stream Instrument Keys (comma-separated)", value="NSE_EQ|INE002A01018,NSE_EQ|INE040H01021", key="ws_symbols")
+            ws_symbols = st.text_input("Stream Symbols (comma-separated)", value="RELIANCE.NS, TCS.NS", key="ws_symbols")
         with col2:
             st.write("Status:")
             st.write(f"**{st.session_state.get('streamer_status', 'Disconnected 🔴')}**")
