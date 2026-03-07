@@ -880,17 +880,21 @@ def display_backtest_page():
                 win_rate = round((winners / total_trades) * 100, 2)
                 total_pnl = round(results_df['P&L (₹)'].sum(), 2)
                 
+                # To calculate real Total P&L %, we sum all PNL and divide by the sum of all Entry Prices
+                total_entry_cost = results_df['Entry Price'].sum()
+                total_pnl_pct = round((total_pnl / total_entry_cost) * 100, 2) if total_entry_cost > 0 else 0
+                
                 # Summary Dashboard
                 m1, m2, m3, m4 = st.columns(4)
                 m1.metric("Total Trades", total_trades)
                 m2.metric("Win Rate", f"{win_rate}%")
-                m3.metric("Winners (Green)", winners)
-                m4.metric("Losers (Red)", losers)
+                m3.metric("Total Trade Wins", winners)
+                m4.metric("Total Trades Lost", losers)
                 
                 if total_pnl > 0:
-                    st.success(f"**Gross Strategy P&L:** +₹{total_pnl}")
+                    st.success(f"**Gross Strategy P&L:** +₹{total_pnl}   |   **Total P&L %:** +{total_pnl_pct}%")
                 else:
-                    st.error(f"**Gross Strategy P&L:** ₹{total_pnl}")
+                    st.error(f"**Gross Strategy P&L:** ₹{total_pnl}   |   **Total P&L %:** {total_pnl_pct}%")
                 
                 st.markdown("#### Trade Log")
                 
