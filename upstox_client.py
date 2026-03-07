@@ -155,6 +155,25 @@ class UpstoxClient:
             interval: The interval for OHLC. Valid values: '1d' (default), 'I1' (1-min), 'I30' (30-min).
                       Note: '1d' returns only today's live OHLC.
         """
+        if self.access_token == "MOCK_TOKEN_FOR_TESTING":
+            # Return realistic fake data for testing without auth
+            import random
+            
+            fake_data = {"status": "success", "data": {}}
+            keys = [k.strip() for k in instrument_keys.split(",")]
+            for k in keys:
+                price = random.uniform(2000, 3000)
+                fake_data["data"][k] = {
+                    "live_ohlc": {
+                        "open": price * random.uniform(0.98, 1.02),
+                        "high": price * random.uniform(1.0, 1.05),
+                        "low": price * random.uniform(0.95, 0.99),
+                        "close": price * random.uniform(0.98, 1.02),
+                    },
+                    "last_price": price
+                }
+            return fake_data
+
         params = {
             "instrument_key": instrument_keys,
             "interval": interval

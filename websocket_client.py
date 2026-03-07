@@ -40,11 +40,56 @@ class UpstoxStreamerManager:
         return cls._instance
 
     def initialize(self, api_key: str, access_token: str):
-        if not HAS_UPSTOX_SDK:
-            raise ImportError("upstox-python-sdk is not installed. Please add it to requirements.txt")
-            
         if self.is_running and self.streamer:
             return  # Already running
+
+        # --- MOCK MODE HANDLING ---
+        if access_token == "MOCK_TOKEN_FOR_TESTING":
+            st.session_state["streamer_status"] = "Connected (Mock) 🟢"
+            self.is_running = True
+            
+            def mock_stream():
+                import random
+                while self.is_running:
+                    try:
+                        time.sleep(1)
+                        if not self.subscriptions:
+                            continue
+                            
+                        # Pick a random subscribed instrument and generate a fake tick
+                        inst = random.choice(list(self.subscriptions))
+                        inst_name = inst.split('|')[-1]
+                        
+                        # Get previous or initial price
+                        last_tick = self.live_data.get(inst_name)
+                        if last_tick:
+                            price = last_tick['ltp'] * random.uniform(0.998, 1.002)
+                        else:
+                            price = random.uniform(1000, 3000)
+                            
+                        tick = {
+                            'instrument': inst_name,
+                            'ltp': round(price, 2),
+                            'close': round(price * 0.99, 2),
+                            'timestamp': time.time()
+                        }
+                        
+                        self.live_data[inst_name] = tick
+                        
+                        if self.on_tick_callback:
+                            self.on_tick_callback(tick)
+                            
+                    except Exception as e:
+                        logger.error(f"Mock thread error: {e}")
+                        
+            self.streamer = "MOCK_STREAMER"
+            self.thread = threading.Thread(target=mock_stream, daemon=True)
+            self.thread.start()
+            return
+        # --------------------------
+
+        if not HAS_UPSTOX_SDK:
+            raise ImportError("upstox-python-sdk is not installed. Please add it to requirements.txt")
 
         configuration = upstox_client.Configuration()
         configuration.access_token = access_token
@@ -128,12 +173,12 @@ class UpstoxStreamerManager:
         new_subs = set(instrument_keys) - self.subscriptions
         self.subscriptions.update(instrument_keys)
         
-        if self.is_running and self.streamer:
+        if self.is_running and self.streamer and self.streamer != "MOCK_STREAMER":
             if new_subs:
                 self.streamer.subscribe(list(new_subs), mode)
 
     def unsubscribe(self, instrument_keys: List[str]):
-        if self.is_running and self.streamer:
+        if self.is_running and self.streamer and self.streamer != "MOCK_STREAMER":
             self.streamer.unsubscribe(instrument_keys)
         # remove from set
         for key in instrument_keys:
@@ -141,9 +186,10 @@ class UpstoxStreamerManager:
                 self.subscriptions.remove(key)
 
     def stop(self):
-        if self.streamer:
+        if self.streamer and self.streamer != "MOCK_STREAMER":
             self.streamer.disconnect()
         self.is_running = False
+        self.streamer = None
         self.thread = None
         st.session_state["streamer_status"] = "Disconnected 🔴"
 

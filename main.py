@@ -39,6 +39,17 @@ PRESET_API_SECRET = "4m1evnlcq3"
 def login_page():
     """Professional OAuth-style login page with AlgoRooms design."""
 
+    # Auto-login trigger for "hardcoded auth"
+    if PRESET_API_KEY and PRESET_API_SECRET:
+        if "api_key" not in st.session_state:
+            st.session_state["api_key"] = PRESET_API_KEY
+            st.session_state["api_secret"] = PRESET_API_SECRET
+            st.session_state["access_token"] = "MOCK_TOKEN_FOR_TESTING"
+            st.session_state["profile"] = {"user_name": "Demo User (Auto-Login)", "email": "demo@example.com"}
+            st.session_state["oauth_done"] = True
+            safe_rerun()
+            return
+
     # Professional login page styling
     st.markdown("""
     <style>
