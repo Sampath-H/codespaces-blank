@@ -161,21 +161,41 @@ class UpstoxClient:
                       Note: '1d' returns only today's live OHLC.
         """
         if self.access_token == "MOCK_TOKEN_FOR_TESTING":
-            # Return realistic fake data for testing without auth
-            import random
+            # Return realistic fake data using yfinance for accurate pricing
+            import yfinance as yf
             
             fake_data = {"status": "success", "data": {}}
             keys = [k.strip() for k in instrument_keys.split(",")]
             for k in keys:
-                price = random.uniform(2000, 3000)
+                try:
+                    # Append .NS if missing to fetch from NSE via yfinance
+                    yf_symbol = k if k.endswith('.NS') else f"{k}.NS"
+                    ticker = yf.Ticker(yf_symbol)
+                    hist = ticker.history(period="1d")
+                    if not hist.empty:
+                        last_price = float(hist['Close'].iloc[-1])
+                        open_price = float(hist['Open'].iloc[-1])
+                        high = float(hist['High'].iloc[-1])
+                        low = float(hist['Low'].iloc[-1])
+                    else:
+                        last_price = 1000.0
+                        open_price = 1000.0
+                        high = 1010.0
+                        low = 990.0
+                except:
+                    last_price = 1000.0
+                    open_price = 1000.0
+                    high = 1010.0
+                    low = 990.0
+                    
                 fake_data["data"][k] = {
                     "live_ohlc": {
-                        "open": price * random.uniform(0.98, 1.02),
-                        "high": price * random.uniform(1.0, 1.05),
-                        "low": price * random.uniform(0.95, 0.99),
-                        "close": price * random.uniform(0.98, 1.02),
+                        "open": round(open_price, 2),
+                        "high": round(high, 2),
+                        "low": round(low, 2),
+                        "close": round(last_price, 2),
                     },
-                    "last_price": price
+                    "last_price": round(last_price, 2)
                 }
             return fake_data
 

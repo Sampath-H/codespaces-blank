@@ -65,7 +65,18 @@ class UpstoxStreamerManager:
                         if last_tick:
                             price = last_tick['ltp'] * random.uniform(0.998, 1.002)
                         else:
-                            price = random.uniform(1000, 3000)
+                            # Fetch real price from yfinance only once
+                            import yfinance as yf
+                            yf_symbol = inst_name if inst_name.endswith('.NS') else f"{inst_name}.NS"
+                            try:
+                                ticker = yf.Ticker(yf_symbol)
+                                hist = ticker.history(period="1d")
+                                if not hist.empty:
+                                    price = float(hist['Close'].iloc[-1])
+                                else:
+                                    price = random.uniform(1000, 3000)
+                            except:
+                                price = random.uniform(1000, 3000)
                             
                         tick = {
                             'instrument': inst_name,
