@@ -469,7 +469,7 @@ def main():
         
         page = st.radio(
             "Navigation",
-            ["Dashboard", "Strategies", "Backtest", "Reports", "Settings"],
+            ["Dashboard", "📊 Scanner", "🤖 Algo Trading", "Strategies", "Backtest", "Reports", "Settings"],
             label_visibility="collapsed"
         )
         
@@ -498,6 +498,10 @@ def main():
     # Page Routing
     if page == "Dashboard":
         display_dashboard()
+    elif page == "📊 Scanner":
+        display_scanner_page()
+    elif page == "🤖 Algo Trading":
+        display_algo_trading_page()
     elif page == "Strategies":
         display_strategies_page()
     elif page == "Backtest":
@@ -612,7 +616,7 @@ def display_strategies_page():
     
     with tab2:
         st.markdown("Your active strategies appear here")
-        display_scanner_page()
+        st.info("Go to **📊 Scanner** page from the sidebar to scan for trading setups.")
     
     with tab3:
         st.markdown("Pre-built strategy templates")
