@@ -22,7 +22,137 @@ install_and_import("protobuf", "google.protobuf")
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import time
+import os
+import yfinance as yf
+from datetime import datetime, timedelta, date
+
+# ---------------------------------------------------------------------------
+# Backtesting Engine
+# ---------------------------------------------------------------------------
+def get_historical_market_days(lookback_selection):
+    """Calculate the start and end dates based on the dropdown selection, skipping weekends."""
+    today = datetime.now()
+    end_date = today
+    
+    if lookback_selection == "Today":
+        start_date = today
+    elif lookback_selection == "Yesterday":
+        start_date = today - timedelta(days=1)
+        while start_date.weekday() >= 5: # Skip weekends
+            start_date -= timedelta(days=1)
+    elif "Past" in lookback_selection:
+        days_to_look_back = int(lookback_selection.split(" ")[1])
+        start_date = today
+        days_counted = 0
+        while days_counted < days_to_look_back:
+            start_date -= timedelta(days=1)
+            if start_date.weekday() < 5: # Mon-Fri
+                days_counted += 1
+    else:
+        start_date = today - timedelta(days=30)
+        
+    return start_date, end_date
+
+def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback):
+    """
+    Simulates the strategy on intraday data (5m) over the specified period.
+    Returns a dataframe of closed trades and summary metrics.
+    """
+    start_time, end_time = get_historical_market_days(lookback)
+    
+    # yfinance needs slightly adjusted dates for intraday fetching
+    yf_start = (start_time - timedelta(days=5)).strftime("%Y-%m-%d") # extra days for MA calc
+    yf_end = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
+    
+    all_trades = []
+    
+    for symbol in symbols:
+        try:
+            # Fetch 5-minute intraday data
+            df = yf.download(symbol, start=yf_start, end=yf_end, interval="5m", progress=False, auto_adjust=True)
+            if df.empty: continue
+                
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0] for col in df.columns]
+                
+            # Filter to Indian Market Hours (9:15 to 15:30)
+            # Yfinance returns data in local timezone or UTC depending on setup, we just use the raw times
+            
+            # Calculate MAs
+            if ma_type == "EMA":
+                df['fast_ma'] = df['Close'].ewm(span=fast_ma, adjust=False).mean()
+                df['slow_ma'] = df['Close'].ewm(span=slow_ma, adjust=False).mean()
+            else:
+                df['fast_ma'] = df['Close'].rolling(window=fast_ma).mean()
+                df['slow_ma'] = df['Close'].rolling(window=slow_ma).mean()
+                
+            df.dropna(inplace=True)
+            
+            # Cut down to just the strictly requested lookback date range now that MAs are calculated
+            df = df[df.index.date >= start_time.date()]
+            if df.empty: continue
+            
+            in_position = False
+            entry_price = 0
+            entry_time = None
+            target = 0
+            sl = 0
+            
+            for i in range(1, len(df)):
+                current = df.iloc[i]
+                prev = df.iloc[i-1]
+                
+                # If we are not in a position, look for a crossover
+                if not in_position:
+                    # Golden Cross
+                    if preview_cross := (current['fast_ma'] > current['slow_ma'] and prev['fast_ma'] <= prev['slow_ma']):
+                        in_position = True
+                        entry_price = round(float(current['Close']), 2)
+                        entry_time = df.index[i]
+                        target = entry_price * (1 + (target_pct / 100))
+                        sl = entry_price * (1 - (sl_pct / 100))
+                
+                # If we are in a position, check if Target or SL hit
+                else:
+                    high = float(current['High'])
+                    low = float(current['Low'])
+                    
+                    exit_price = 0
+                    reason = ""
+                    
+                    if high >= target:
+                        exit_price = round(target, 2)
+                        reason = "Target Hit"
+                    elif low <= sl:
+                        exit_price = round(sl, 2)
+                        reason = "Stop Loss Hit"
+                        
+                    # Force exit at 15:25 (Intraday Square-off)
+                    elif current.name.hour == 15 and current.name.minute >= 25:
+                        exit_price = round(float(current['Close']), 2)
+                        reason = "EOD Square-off"
+                        
+                    if exit_price > 0:
+                        pnl = round(exit_price - entry_price, 2)
+                        pnl_pct = round((pnl / entry_price) * 100, 2)
+                        
+                        all_trades.append({
+                            "Symbol": symbol,
+                            "Entry Time": entry_time.strftime("%Y-%m-%d %H:%M"),
+                            "Exit Time": current.name.strftime("%Y-%m-%d %H:%M"),
+                            "Entry Price": entry_price,
+                            "Exit Price": exit_price,
+                            "Reason": reason,
+                            "P&L (₹)": pnl,
+                            "P&L (%)": f"{pnl_pct}%"
+                        })
+                        in_position = False
+                        
+        except Exception as e:
+            continue
+            
+    return pd.DataFrame(all_trades)
 import os
 
 from scanner import display_scanner_page
@@ -689,68 +819,70 @@ def display_strategies_page():
 
 
 def display_backtest_page():
-    """Backtest results and analysis"""
-    st.markdown("### 📊 Backtest Analysis")
+    """Backtest execution and simulated analysis"""
+    st.markdown("### 📊 Engine Backtester")
     
-    st.markdown('<div class="form-section">', unsafe_allow_html=True)
-    st.markdown("#### Backtest Results")
-    
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
-    with col1:
-        if st.button("1M", use_container_width=True):
-            pass
-    with col2:
-        if st.button("3M", use_container_width=True):
-            pass
-    with col3:
-        if st.button("6M", use_container_width=True):
-            pass
-    with col4:
-        if st.button("1Y", use_container_width=True, key="1y"):
-            pass
-    with col5:
-        if st.button("2Y", use_container_width=True):
-            pass
-    with col6:
-        if st.button("Custom", use_container_width=True):
-            pass
-    
-    # Summary Metrics
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns([1, 2])
     
     with col1:
-        st.markdown("""
-        <div class="metric-card">
-            <h3>471</h3>
-            <p>Trading Days</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        st.markdown('<div class="form-section">', unsafe_allow_html=True)
+        st.markdown("#### Setup Strategy")
+        
+        strategy = st.selectbox("Strategy to Backtest", ["Moving Average Crossover"])
+        lookback = st.selectbox("Historical Horizon", ["Today", "Yesterday", "Past 3 Days", "Past 5 Days", "Past 10 Days"])
+        
+        st.markdown("**Parameters**")
+        fast_len = st.number_input("Fast MA Length", 1, 200, 9)
+        slow_len = st.number_input("Slow MA Length", 1, 200, 21)
+        ma_type = st.selectbox("MA Type", ["SMA", "EMA"])
+        
+        st.markdown("**Risk Management**")
+        tp_pct = st.number_input("Target Profit (%)", 0.1, 10.0, 2.0, step=0.1)
+        sl_pct = st.number_input("Stop Loss (%)", 0.1, 10.0, 1.0, step=0.1)
+        
+        run_btn = st.button("▶️ Run Backtest", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+        symbols_str = st.text_area("Stock Universe (comma separated)", "RELIANCE.NS, SBIN.NS, TCS.NS", height=100)
+        symbols = [s.strip() for s in symbols_str.split(",")]
+        
     with col2:
-        st.markdown("""
-        <div class="metric-card">
-            <h3 class="value-positive">50.74%</h3>
-            <p>Win Days</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="metric-card">
-            <h3 class="value-negative">48.20%</h3>
-            <p>Loss Days</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown("""
-        <div class="metric-card">
-            <h3 class="value-positive">₹47,825</h3>
-            <p>Total P&L</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        if run_btn:
+            with st.spinner(f"Simulating Intraday Trades for {lookback}..."):
+                results_df = run_backtest(symbols, strategy, fast_len, slow_len, ma_type, tp_pct, sl_pct, lookback)
+                
+            if results_df.empty:
+                st.warning(f"No completed trades found during {lookback}.")
+            else:
+                total_trades = len(results_df)
+                winners = len(results_df[results_df['P&L (₹)'] > 0])
+                losers = len(results_df[results_df['P&L (₹)'] <= 0])
+                win_rate = round((winners / total_trades) * 100, 2)
+                total_pnl = round(results_df['P&L (₹)'].sum(), 2)
+                
+                # Summary Dashboard
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Total Trades", total_trades)
+                m2.metric("Win Rate", f"{win_rate}%")
+                m3.metric("Winners (Green)", winners)
+                m4.metric("Losers (Red)", losers)
+                
+                if total_pnl > 0:
+                    st.success(f"**Gross Strategy P&L:** +₹{total_pnl}")
+                else:
+                    st.error(f"**Gross Strategy P&L:** ₹{total_pnl}")
+                
+                st.markdown("#### Trade Log")
+                
+                # Apply green/red styling to dataframe P&L
+                def color_pnl(val):
+                    color = '#28a745' if val > 0 else '#dc3545'
+                    return f'color: {color}; font-weight: bold;'
+                
+                styled_df = results_df.style.applymap(color_pnl, subset=['P&L (₹)'])
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("Configure your strategy on the left and click **Run Backtest** to simulate historical P&L.")
 
 
 def display_reports_page():
