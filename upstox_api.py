@@ -288,6 +288,21 @@ class PaperUpstoxClient(UpstoxClient):
         product: str = "MIS",
         **kwargs,
     ) -> Any:
+        
+        # Simulate MARKET order fill price
+        if order_type == "MARKET" and price is None:
+            import yfinance as yf
+            try:
+                yf_symbol = symbol if symbol.endswith(".NS") else f"{symbol}.NS"
+                ticker = yf.Ticker(yf_symbol)
+                hist = ticker.history(period="1d")
+                if not hist.empty:
+                    price = round(float(hist['Close'].iloc[-1]), 2)
+                else:
+                    price = 1000.0  # fallback
+            except:
+                price = 1000.0  # fallback
+                
         order = {
             "order_id": f"PAPER{self.next_order_id}",
             "symbol": symbol,
