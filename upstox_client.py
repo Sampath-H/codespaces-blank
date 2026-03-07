@@ -1,5 +1,9 @@
 import requests
 from typing import Optional, Tuple, Any
+import websocket
+import threading
+import json
+import time
 
 
 class UpstoxClient:
@@ -146,6 +150,107 @@ class UpstoxClient:
         resp = self.session.get(self._url("/portfolio/positions"))
         resp.raise_for_status()
         return resp.json()
+
+    def get_historical_candles(self, instrument_key: str, interval: str, from_date: str, to_date: str) -> Any:
+        """Fetch historical OHLC candle data for an instrument.
+
+        Args:
+            instrument_key: The instrument key (e.g., 'NSE_EQ|INE002A01018')
+            interval: Time interval ('1minute', '5minute', '10minute', '15minute', '30minute', '1hour', '1day')
+            from_date: Start date in 'YYYY-MM-DD' format
+            to_date: End date in 'YYYY-MM-DD' format
+
+        Returns:
+            JSON response with candle data
+        """
+        params = {
+            'from_date': from_date,
+            'to_date': to_date
+        }
+        resp = self.session.get(self._url(f"/historical-candle/{instrument_key}/{interval}"), params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def get_live_quote(self, instrument_key: str) -> Any:
+        """Fetch live market quote for an instrument.
+
+        Args:
+            instrument_key: The instrument key
+
+        Returns:
+            JSON response with quote data including LTP
+        """
+        resp = self.session.get(self._url(f"/market-data/quote/{instrument_key}"))
+        resp.raise_for_status()
+        return resp.json()
+
+    def start_live_feed(self, instrument_keys: list, callback: callable, stop_event: Optional[threading.Event] = None):
+        """Start real-time OHLC feed for given instruments using WebSocket.
+
+        Args:
+            instrument_keys: List of instrument keys to subscribe to
+            callback: Function to call with live data. Called with dict containing OHLC and LTP
+            stop_event: Optional threading.Event to stop the feed
+
+        The callback will receive data in format:
+        {"instrument_key": {"ohlc": {"open": float, "high": float, "low": float, "close": float}, "ltp": float}}
+        """
+        def on_message(ws, message):
+            try:
+                data = json.loads(message)
+                if data.get("type") == "feed":
+                    feeds = data.get("payload", {}).get("feeds", {})
+                    for key, feed_data in feeds.items():
+                        ohlc = feed_data.get("ohlc", {})
+                        ltp = feed_data.get("ltp")
+                        if ohlc or ltp:
+                            callback({key: {"ohlc": ohlc, "ltp": ltp}})
+            except Exception as e:
+                print(f"Error processing message: {e}")
+
+        def on_error(ws, error):
+            print(f"WebSocket error: {error}")
+
+        def on_close(ws, close_status_code, close_msg):
+            print("WebSocket connection closed")
+
+        def on_open(ws):
+            # Authorize
+            auth_msg = {
+                "type": "authorize",
+                "payload": {
+                    "key": self.access_token
+                }
+            }
+            ws.send(json.dumps(auth_msg))
+            
+            # Subscribe
+            sub_msg = {
+                "type": "subscribe",
+                "payload": {
+                    "keys": instrument_keys
+                }
+            }
+            ws.send(json.dumps(sub_msg))
+
+        def run_feed():
+            ws = websocket.WebSocketApp(
+                "wss://ws.upstox.com/v2/feed",
+                on_open=on_open,
+                on_message=on_message,
+                on_error=on_error,
+                on_close=on_close
+            )
+            ws.run_forever()
+
+        thread = threading.Thread(target=run_feed, daemon=True)
+        thread.start()
+        
+        if stop_event:
+            def wait_and_stop():
+                stop_event.wait()
+                # Note: WebSocket doesn't have direct stop, but thread will end
+            threading.Thread(target=wait_and_stop, daemon=True).start()
 
     def place_order(
         self,
