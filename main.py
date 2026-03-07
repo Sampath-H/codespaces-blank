@@ -3,15 +3,22 @@
 import sys
 import subprocess
 
-def install_and_import(package):
+def install_and_import(package, import_name=None):
+    if import_name is None:
+        import_name = package
     try:
-        __import__(package)
+        __import__(import_name)
     except ImportError:
+        print(f"Installing {package}...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        __import__(package)
+        __import__(import_name)
 
 for pkg in ["streamlit", "yfinance", "pandas", "openpyxl", "requests"]:
     install_and_import(pkg)
+
+# Specific packages with different module names
+install_and_import("upstox-python-sdk", "upstox_client")
+install_and_import("protobuf", "google.protobuf")
 
 import streamlit as st
 import pandas as pd
