@@ -86,8 +86,12 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     for symbol in symbols:
         try:
             # 1. FETCH SPOT DATA
-            if enable_options and "NIFTY" in symbol:
-                instrument = f"NSE_INDEX|Nifty 50" if symbol == "NIFTY" else f"NSE_INDEX|Nifty Bank" if symbol == "BANKNIFTY" else f"BSE_INDEX|SENSEX"
+            if symbol == "NIFTY":
+                instrument = "NSE_INDEX|Nifty 50"
+            elif symbol == "BANKNIFTY":
+                instrument = "NSE_INDEX|Nifty Bank"
+            elif symbol == "SENSEX":
+                instrument = "BSE_INDEX|SENSEX"
             else:
                 instrument = symbol if "|" in symbol else f"NSE_EQ|{symbol.replace('.NS', '')}"
                 
