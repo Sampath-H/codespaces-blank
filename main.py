@@ -992,14 +992,16 @@ def display_backtest_page():
         run_btn = st.button("▶️ Run Backtest", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        strategy_universe = st.selectbox(
+        strategy_universe = st.radio(
             "Backtest Universe",
             ["Nifty 500", "F&O Stocks", "Indices", "Custom"],
             index=2 if enable_options else 0,
-            key="backtest_universe"
+            key="backtest_universe",
+            horizontal=True
         )
         
         if strategy_universe == "Indices":
+            st.info("📊 **Testing on:** NIFTY, BANKNIFTY, SENSEX")
             symbols = ["NIFTY", "BANKNIFTY", "SENSEX"]
         elif strategy_universe == "Custom":
             symbols_str = st.text_area("Stock Universe (comma separated)", "RELIANCE.NS, SBIN.NS, TCS.NS", height=100)
