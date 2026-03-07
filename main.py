@@ -980,24 +980,8 @@ def display_backtest_page():
         st.markdown("**Risk Management**")
         tp_pct = st.number_input("Target Profit (%)", 0.1, 10.0, 2.0, step=0.1)
         sl_pct = st.number_input("Stop Loss (%)", 0.1, 10.0, 1.0, step=0.1)
-        st.markdown("**Options Strategy (Indices Only)**")
-        enable_options = st.checkbox("Trade Options instead of Spot", value=False)
-        
-        if enable_options:
-            ecnt1, ecnt2 = st.columns(2)
-            with ecnt1:
-                opt_type = st.selectbox("Option Type", ["CE", "PE"])
-                expiry_type = st.selectbox("Expiry", ["Weekly", "Monthly"])
-            with ecnt2:
-                # 0 = ATM, -1 = 1 OTM (Call), +1 = 1 ITM (Call)
-                strike_selection = st.selectbox(
-                    "Strike Selection", 
-                    options=[-3, -2, -1, 0, 1, 2, 3],
-                    format_func=lambda x: "ATM" if x == 0 else (f"{abs(x)} ITM" if x > 0 else f"{abs(x)} OTM"),
-                    index=3
-                )
-        else:
-            opt_type, expiry_type, strike_selection = None, None, None
+        # Options UI Removed per user request
+        opt_type, expiry_type, strike_selection, enable_options = None, None, None, False
             
         run_btn = st.button("▶️ Run Backtest", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1005,14 +989,14 @@ def display_backtest_page():
         strategy_universe = st.radio(
             "Backtest Universe",
             ["Nifty 500", "F&O Stocks", "Indices", "Custom"],
-            index=2 if enable_options else 0,
+            index=2,
             key="backtest_universe",
             horizontal=True
         )
         
         if strategy_universe == "Indices":
-            st.info("📊 **Testing on:** NIFTY, BANKNIFTY, SENSEX")
-            symbols = ["NIFTY", "BANKNIFTY", "SENSEX"]
+            index_choice = st.radio("Select Index", ["NIFTY", "BANKNIFTY", "SENSEX"], horizontal=True)
+            symbols = [index_choice]
         elif strategy_universe == "Custom":
             symbols_str = st.text_area("Stock Universe (comma separated)", "RELIANCE.NS, SBIN.NS, TCS.NS", height=100)
             symbols = [s.strip() for s in symbols_str.split(",")]
