@@ -282,6 +282,8 @@ def display_algo_trading_page():
                         st.json(executed_orders)
                     else:
                         st.info("No moving average crossovers detected today for the selected universe.")
+                    
+                    setups = pd.DataFrame() # Define setups to prevent UnboundLocalError
 
                 elif strategy_type == "Current Signals":
                     results = fetch_data(symbols, analysis_type="basic")
