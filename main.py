@@ -20,7 +20,7 @@ import os
 
 from scanner import display_scanner_page
 from algo_trading import display_algo_trading_page
-from upstox_client import UpstoxClient
+from upstox_api import UpstoxClient
 
 # helper for re-running the app in a version-compatible way
 

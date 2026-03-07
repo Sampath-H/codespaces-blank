@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from scanner import fetch_data, fetch_daily_breakout_data, scan_monthly_green_open, scan_monthly_red_open
-from upstox_client import UpstoxClient, PaperUpstoxClient
+from upstox_api import UpstoxClient, PaperUpstoxClient
 
 # helper for re-running the app in a version-compatible way
 def safe_rerun():
@@ -250,11 +250,8 @@ def display_algo_trading_page():
                             display_data.append(row)
                         
                         st.dataframe(pd.DataFrame(display_data), use_container_width=True)
-                        with st.expander("View Raw JSON Response"):
-                            st.json(ohlc_data)
                     else:
                         st.warning("No data returned or unexpected format.")
-                        st.json(ohlc_data)
                 except Exception as e:
                     st.error(f"Failed to fetch OHLC data: {e}")
 
