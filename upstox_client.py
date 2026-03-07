@@ -147,6 +147,22 @@ class UpstoxClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_market_quote_ohlc(self, instrument_keys: str, interval: str = "1d") -> Any:
+        """Fetch Live OHLC quotes for given instrument keys.
+        
+        Args:
+            instrument_keys: Comma-separated list of Upstox instrument keys (e.g., 'NSE_EQ|INE002A01018')
+            interval: The interval for OHLC. Valid values: '1d' (default), 'I1' (1-min), 'I30' (30-min).
+                      Note: '1d' returns only today's live OHLC.
+        """
+        params = {
+            "instrument_key": instrument_keys,
+            "interval": interval
+        }
+        resp = self.session.get(self._url("/market-quote/ohlc"), params=params)
+        resp.raise_for_status()
+        return resp.json()
+
     def place_order(
         self,
         symbol: str,

@@ -211,6 +211,53 @@ def display_algo_trading_page():
                         st.success(f"Executed {len(executed_orders)} orders")
                         st.json(executed_orders)
     
+    # Live Market Data
+    st.markdown("---")
+    st.subheader("📡 Live Market Data (OHLC)")
+    st.info("Fetch real-time Open, High, Low, Close (OHLC) data directly from the Upstox API.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        ohlc_symbols = st.text_input("Instrument Keys (comma-separated)", value="NSE_EQ|INE002A01018", help="Example: NSE_EQ|INE002A01018 (Reliance)")
+    with col2:
+        ohlc_interval = st.selectbox("Interval", ["1d", "I1", "I30"], help="1d: Daily (returns live_ohlc), I1: 1-min, I30: 30-min")
+        
+    if st.button("Fetch Live OHLC"):
+        if not api_key or not access_token:
+            st.error("Please provide API credentials and authenticate first.")
+        elif not ohlc_symbols:
+            st.warning("Please enter at least one instrument key.")
+        else:
+            # We use the real UpstoxClient even in paper mode to fetch real market data if token is valid
+            client = UpstoxClient(api_key, api_secret, access_token)
+            with st.spinner("Fetching live data..."):
+                try:
+                    ohlc_data = client.get_market_quote_ohlc(ohlc_symbols, ohlc_interval)
+                    if ohlc_data and ohlc_data.get("status") == "success" and "data" in ohlc_data:
+                        display_data = []
+                        for key, value in ohlc_data["data"].items():
+                            row = {"Instrument": key.split('|')[-1]}
+                            # Based on interval, API returns 'ohlc' or 'live_ohlc' (or both)
+                            if "ohlc" in value:
+                                row.update(value["ohlc"])
+                            elif "live_ohlc" in value:
+                                row.update(value["live_ohlc"])  # '1d' typically returns live_ohlc
+                            
+                            # Add last_price if available
+                            if "last_price" in value:
+                                row["Last Price"] = value["last_price"]
+                                
+                            display_data.append(row)
+                        
+                        st.dataframe(pd.DataFrame(display_data), use_container_width=True)
+                        with st.expander("View Raw JSON Response"):
+                            st.json(ohlc_data)
+                    else:
+                        st.warning("No data returned or unexpected format.")
+                        st.json(ohlc_data)
+                except Exception as e:
+                    st.error(f"Failed to fetch OHLC data: {e}")
+
     # Order History / Paper Orders
     st.markdown("---")
     st.subheader("📋 Order History")
