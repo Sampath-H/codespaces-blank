@@ -213,46 +213,6 @@ class UpstoxClient:
             to_date: 'YYYY-MM-DD'
             from_date: 'YYYY-MM-DD'
         """
-        # Mock for paper trading / local testing without token
-        if self.access_token == "MOCK_TOKEN_FOR_TESTING":
-            import yfinance as yf
-            import pandas as pd
-            # Fallback to yfinance for Spot if possible, otherwise return empty
-            ticker = ""
-            if "Nifty 50" in instrument_key: ticker = "^NSEI"
-            elif "Nifty Bank" in instrument_key: ticker = "^NSEBANK"
-            elif "SENSEX" in instrument_key: ticker = "^BSESN"
-            elif "NSE_EQ|" in instrument_key: ticker = instrument_key.split("|")[1] + ".NS"
-            else: return {"status": "error", "message": "Cannot mock historical options chain without active token."}
-            
-            yf_interval = "1m" if "minute" in interval else "1d"
-            
-            # Yfinance has strict 7-day limits for 1m data. Clamp the from_date if necessary to avoid returning empty DF
-            if yf_interval == "1m":
-                from datetime import datetime, timedelta
-                seven_days_ago = (datetime.now() - timedelta(days=6)).strftime("%Y-%m-%d")
-                if from_date < seven_days_ago:
-                    from_date = seven_days_ago
-                    
-            df = yf.download(ticker, start=from_date, end=to_date, interval=yf_interval, progress=False, auto_adjust=True)
-            if df.empty: return {"status": "success", "data": {"candles": []}}
-            
-            # Ensure the yfinance index is exactly represented in IST before stringifying
-            if df.index.tz is None:
-                df.index = df.index.tz_localize('UTC').tz_convert('Asia/Kolkata')
-            else:
-                df.index = df.index.tz_convert('Asia/Kolkata')
-                
-            candles = []
-            for idx, row in df.iterrows():
-                # [timestamp, open, high, low, close, volume, oi]
-                # Format exactly as Upstox expects (IST)
-                candles.append([
-                    idx.strftime("%Y-%m-%dT%H:%M:%S+05:30"),
-                    row['Open'], row['High'], row['Low'], row['Close'], row.get('Volume', 0), 0
-                ])
-            return {"status": "success", "data": {"candles": candles[::-1]}} # Upstox returns newest first
-            
         url = self._url(f"/historical-candle/{instrument_key}/{interval}/{to_date}/{from_date}")
         resp = self.session.get(url)
         try:
