@@ -1,8 +1,56 @@
 import streamlit as st
 import pandas as pd
+import time
+import os
+import yfinance as yf
 from datetime import datetime
 from scanner import fetch_data, fetch_daily_breakout_data, scan_monthly_green_open, scan_monthly_red_open
 from upstox_api import UpstoxClient, PaperUpstoxClient
+
+# ---------------------------------------------------------------------------
+# Moving Average Strategy Engine
+# ---------------------------------------------------------------------------
+def handle_ma_crossover(symbol, fast_len, slow_len, ma_type):
+    """
+    Downloads historical data and checks for a moving average crossover today.
+    Returns: 'BUY' (Golden Cross), 'SELL' (Death Cross), or None.
+    """
+    try:
+        data = yf.download(
+            symbol, period="6mo", progress=False, auto_adjust=True
+        )
+        if data is None or len(data) < slow_len + 2:
+            return None
+            
+        if isinstance(data.columns, pd.MultiIndex):
+            data.columns = [col[0] for col in data.columns]
+            
+        close_prices = data['Close']
+        
+        if ma_type == "EMA":
+            fast_ma = close_prices.ewm(span=fast_len, adjust=False).mean()
+            slow_ma = close_prices.ewm(span=slow_len, adjust=False).mean()
+        else:
+            fast_ma = close_prices.rolling(window=fast_len).mean()
+            slow_ma = close_prices.rolling(window=slow_len).mean()
+            
+        # Get last two days to check for crossover
+        fast_today = fast_ma.iloc[-1]
+        slow_today = slow_ma.iloc[-1]
+        fast_yest = fast_ma.iloc[-2]
+        slow_yest = slow_ma.iloc[-2]
+        
+        # Golden Cross (Buy signal)
+        if fast_today > slow_today and fast_yest <= slow_yest:
+            return "BUY"
+            
+        # Death Cross (Sell signal)
+        elif fast_today < slow_today and fast_yest >= slow_yest:
+            return "SELL"
+            
+        return None
+    except Exception as e:
+        return None
 
 # helper for re-running the app in a version-compatible way
 def safe_rerun():
@@ -152,16 +200,69 @@ def display_algo_trading_page():
     
     strategy_type = st.selectbox(
         "Select Strategy",
-        ["Current Signals", "Current Signals with Cluster Analysis", "Monthly Marubozu"],
+        ["Moving Average Crossover", "Current Signals", "Current Signals with Cluster Analysis", "Monthly Marubozu"],
         key="strategy_type"
     )
+    
+    # Show dynamic inputs if MA is selected
+    fast_ma_len, slow_ma_len, ma_type = 9, 21, "EMA"
+    if strategy_type == "Moving Average Crossover":
+        mac1, mac2, mac3 = st.columns(3)
+        with mac1:
+            fast_ma_len = st.number_input("Fast MA Length", min_value=1, value=9)
+        with mac2:
+            slow_ma_len = st.number_input("Slow MA Length", min_value=1, value=21)
+        with mac3:
+            ma_type = st.selectbox("MA Type", ["SMA", "EMA"])
     
     if st.button("🚀 Run Strategy"):
         if not symbols:
             st.error("No symbols available for strategy")
         else:
             with st.spinner("Scanning for setups..."):
-                if strategy_type == "Current Signals":
+                if strategy_type == "Moving Average Crossover":
+                    executed_orders = []
+                    progress_text = st.empty()
+                    progress_bar = st.progress(0)
+                    total = len(symbols)
+                    
+                    found_signals = []
+                    for i, sym in enumerate(symbols):
+                        progress_text.text(f"Analyzing {sym} ({i+1}/{total})...")
+                        progress_bar.progress((i + 1) / total)
+                        
+                        signal = handle_ma_crossover(sym, fast_ma_len, slow_ma_len, ma_type)
+                        if signal:
+                            found_signals.append({"Stock": sym, "Signal": signal})
+                            try:
+                                client_cls = PaperUpstoxClient if paper_mode else UpstoxClient
+                                client = client_cls(api_key, api_secret, access_token)
+                                result = client.place_order(
+                                    symbol=sym,
+                                    quantity=1,
+                                    transaction_type=signal,
+                                    order_type="MARKET"
+                                )
+                                executed_orders.append(result)
+                                
+                                if paper_mode:
+                                    orders = st.session_state.get("paper_orders", [])
+                                    orders.append(result)
+                                    st.session_state["paper_orders"] = orders
+                            except Exception as ex:
+                                st.error(f"Order failed for {sym}: {ex}")
+                                
+                    progress_text.empty()
+                    progress_bar.empty()
+                    
+                    if found_signals:
+                        st.success(f"Strategy complete! Found {len(found_signals)} crossover setups today.")
+                        st.dataframe(pd.DataFrame(found_signals))
+                        st.json(executed_orders)
+                    else:
+                        st.info("No moving average crossovers detected today for the selected universe.")
+
+                elif strategy_type == "Current Signals":
                     results = fetch_data(symbols, analysis_type="basic")
                     setups = pd.DataFrame(results) if results else pd.DataFrame()
                 elif strategy_type == "Current Signals with Cluster Analysis":
