@@ -214,6 +214,14 @@ def display_algo_trading_page():
             slow_ma_len = st.number_input("Slow MA Length", min_value=1, value=21)
         with mac3:
             ma_type = st.selectbox("MA Type", ["SMA", "EMA"])
+            
+    # Risk Management Inputs
+    st.markdown("**Risk Management**")
+    rm1, rm2 = st.columns(2)
+    with rm1:
+        target_pct = st.number_input("Target Profit (%)", min_value=0.1, value=2.0, step=0.1, help="Take profit percentage")
+    with rm2:
+        stoploss_pct = st.number_input("Stop Loss (%)", min_value=0.1, value=1.0, step=0.1, help="Stop loss percentage")
     
     if st.button("🚀 Run Strategy"):
         if not symbols:
@@ -243,6 +251,19 @@ def display_algo_trading_page():
                                     transaction_type=signal,
                                     order_type="MARKET"
                                 )
+                                # Calculate Target and SL prices
+                                entry_price = result.get('price', 0)
+                                if entry_price:
+                                    if signal == "BUY":
+                                        target_price = round(entry_price * (1 + (target_pct / 100)), 2)
+                                        sl_price = round(entry_price * (1 - (stoploss_pct / 100)), 2)
+                                    else: # SELL
+                                        target_price = round(entry_price * (1 - (target_pct / 100)), 2)
+                                        sl_price = round(entry_price * (1 + (stoploss_pct / 100)), 2)
+                                    
+                                    result["Target"] = target_price
+                                    result["Stop Loss"] = sl_price
+
                                 executed_orders.append(result)
                                 
                                 if paper_mode:
@@ -455,21 +476,25 @@ def display_algo_trading_page():
         else:
             st.info("No live data received yet. Connect the stream and wait for market updates.")
 
-    # Order History / Paper Orders
+    # Order History    # Paper Orders History
     st.markdown("---")
     st.subheader("📋 Order History")
     
-    if paper_mode and st.session_state.get("paper_orders"):
-        st.write("**Paper Orders:**")
-        orders_df = pd.DataFrame(st.session_state["paper_orders"])
-        st.dataframe(orders_df, use_container_width=True)
-        
-        if st.button("Clear Paper Orders"):
-            st.session_state["paper_orders"] = []
-            st.success("Paper orders cleared!")
-            safe_rerun()
-    else:
-        st.info("No orders to display. Place some orders or run a strategy.")
+    if paper_mode:
+        orders = st.session_state.get("paper_orders", [])
+        if orders:
+            df_orders = pd.DataFrame(orders)
+            # Make sure we show the new SL and Target columns if they exist
+            cols_to_show = ['order_id', 'symbol', 'quantity', 'transaction_type', 'order_type', 'product', 'price', 'Stop Loss', 'Target', 'status']
+            # Only select columns that actually exist in the dataframe
+            display_cols = [col for col in cols_to_show if col in df_orders.columns]
+            
+            st.dataframe(df_orders[display_cols], use_container_width=True)
+            if st.button("Clear Paper Orders"):
+                st.session_state["paper_orders"] = []
+                st.rerun()
+        else:
+            st.info("No orders to display. Place some orders or run a strategy.")
     
     # Account Summary
     st.markdown("---")
