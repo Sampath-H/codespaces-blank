@@ -843,9 +843,29 @@ def display_backtest_page():
         run_btn = st.button("▶️ Run Backtest", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
         
-        symbols_str = st.text_area("Stock Universe (comma separated)", "RELIANCE.NS, SBIN.NS, TCS.NS", height=100)
-        symbols = [s.strip() for s in symbols_str.split(",")]
+        # Stock Universe for Strategy
+        strategy_universe = st.selectbox(
+            "Backtest Universe",
+            ["Nifty 500", "F&O Stocks", "Custom"],
+            key="backtest_universe"
+        )
         
+        if strategy_universe == "Custom":
+            symbols_str = st.text_area("Stock Universe (comma separated)", "RELIANCE.NS, SBIN.NS, TCS.NS", height=100)
+            symbols = [s.strip() for s in symbols_str.split(",")]
+        else:
+            # Load from files
+            try:
+                if strategy_universe == "Nifty 500":
+                    symbols_df = pd.read_csv("stocks_500.csv")
+                else:
+                    symbols_df = pd.read_csv("NSE_FO_Stocks_NS.csv")
+                symbols = symbols_df['Symbol'].tolist()
+                symbols = [s + '.NS' if not s.endswith('.NS') else s for s in symbols]
+            except Exception as e:
+                st.error(f"Could not load stock universe: {e}")
+                symbols = []
+                
     with col2:
         if run_btn:
             with st.spinner(f"Simulating Intraday Trades for {lookback}..."):
