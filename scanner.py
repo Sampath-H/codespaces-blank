@@ -556,9 +556,9 @@ def display_scanner_page():
 
     # ---- Sidebar: Analysis Type ----
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔍 Analysis Type")
-    analysis_type = st.sidebar.selectbox(
-        "Select Analysis Type",
+    st.sidebar.markdown("### 🔍 Scanner Type")
+    analysis_type = st.sidebar.radio(
+        "Choose Scanner",
         [
             "Current Signals",
             "Current Signals with Cluster Analysis",
@@ -566,40 +566,12 @@ def display_scanner_page():
             "Both",
             "Monthly Marubozu Open Scan",
         ],
+        label_visibility="collapsed",
     )
 
-    # ---- Sidebar: Signal Filter ----
     analysis_method = "basic"
     if analysis_type in ["Current Signals with Cluster Analysis", "Both"]:
         analysis_method = "cluster"
-
-    if analysis_method == "cluster":
-        signal_options = [
-            "Bullish Confirmed",
-            "Bearish Confirmed",
-            "Breakout Done but Price Returns Friday's Cluster",
-            "Breakdown Done but Price Returns Friday's Cluster",
-            "Post-Movement Consolidation",
-            "Neutral",
-        ]
-        default_signals = [
-            "Bullish Confirmed",
-            "Bearish Confirmed",
-            "Breakout Done but Price Returns Friday's Cluster",
-            "Breakdown Done but Price Returns Friday's Cluster",
-        ]
-    else:
-        signal_options = ["Bullish Confirmed", "Bearish Confirmed", "Neutral"]
-        default_signals = ["Bullish Confirmed", "Bearish Confirmed", "Neutral"]
-
-    if analysis_type != "Monthly Marubozu Open Scan":
-        signal_filter = st.sidebar.multiselect(
-            "Filter by Signal",
-            signal_options,
-            default=default_signals,
-        )
-    else:
-        signal_filter = []
 
     # ---- Info bar ----
     last_friday = get_last_friday()
@@ -689,8 +661,6 @@ def display_scanner_page():
 
             if results:
                 df = pd.DataFrame(results)
-                if signal_filter:
-                    df = df[df['Signal'].isin(signal_filter)]
 
                 # Search
                 search_term = st.text_input(
@@ -761,8 +731,6 @@ def display_scanner_page():
 
             if daily_results:
                 df_daily = pd.DataFrame(daily_results)
-                if signal_filter:
-                    df_daily = df_daily[df_daily['Current Signal'].isin(signal_filter)]
 
                 if not df_daily.empty:
                     col1, col2, col3, col4 = st.columns(4)
