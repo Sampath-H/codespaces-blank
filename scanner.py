@@ -26,106 +26,7 @@ def get_last_friday():
     last_friday = today - timedelta(days=offset + 7 if offset == 0 and today.hour < 18 else offset)
     return last_friday.date()
 
-def find_foundation_candle(symbol, lookback_days=5):
-    """
-    Find the 1-hour foundation candle for a stock.
-    Foundation candle criteria:
-    1. A significant 1-hour candle (large body)
-    2. High volume relative to average
-    3. Clear breakout or breakdown pattern
-    4. Acts as support/resistance level
-    """
-    try:
-        # Get intraday data for the lookback period
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=lookback_days)
-        
-        # Download 1-hour data
-        data = yf.download(symbol, start=start_date, end=end_date, interval="1h", auto_adjust=True, progress=False)
-        
-        if data.empty or len(data) < 10:
-            return None
-            
-        # Clean up multi-level columns if present
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = [col[0] for col in data.columns]
-            
-        data = data.reset_index()
-        data['Datetime'] = pd.to_datetime(data['Datetime'])
-        
-        # Calculate candle properties
-        data['Body_Size'] = abs(data['Close'] - data['Open'])
-        data['Total_Range'] = data['High'] - data['Low']
-        data['Body_Percentage'] = (data['Body_Size'] / data['Total_Range']) * 100
-        
-        # Calculate volume moving average (if volume data available)
-        if 'Volume' in data.columns:
-            data['Volume_MA'] = data['Volume'].rolling(window=20, min_periods=1).mean()
-            data['Volume_Ratio'] = data['Volume'] / data['Volume_MA']
-        else:
-            data['Volume_Ratio'] = 1  # Default if no volume data
-        
-        # Foundation candle criteria
-        foundation_candidates = data[
-            (data['Body_Percentage'] >= 60) &  # Strong body (at least 60% of range)
-            (data['Body_Size'] >= data['Body_Size'].quantile(0.8)) &  # Large body relative to recent candles
-            (data['Volume_Ratio'] >= 1.2) &  # Above average volume
-            (data['Total_Range'] >= data['Total_Range'].quantile(0.7))  # Significant range
-        ].copy()
-        
-        if foundation_candidates.empty:
-            return None
-        
-        # Return the most recent foundation candle
-        return foundation_candidates.iloc[-1]
-    except Exception as e:
-        print(f"Error processing {symbol}: {e}")
-        return None
 
-def scan_foundation_candle_returns(symbols):
-    """
-    Scan for foundation candle returns: stocks that have returned to the foundation candle zone.
-    """
-    results = []
-    for symbol in symbols:
-        try:
-            # Get foundation candle
-            foundation = find_foundation_candle(symbol)
-            if foundation is None:
-                continue
-            
-            # Get current price
-            current_data = yf.download(symbol, period="1d", interval="1m", progress=False)
-            if current_data.empty:
-                continue
-            
-            current_price = current_data['Close'].iloc[-1]
-            
-            # Check if price has returned to foundation zone
-            foundation_high = foundation['High']
-            foundation_low = foundation['Low']
-            
-            # Calculate return to zone
-            if current_price <= foundation_high and current_price >= foundation_low:
-                # Calculate rally or decline from foundation close
-                foundation_close = foundation['Close']
-                rally_percentage = ((current_price - foundation_close) / foundation_close) * 100
-                
-                results.append({
-                    'Stock': symbol.replace('.NS', ''),
-                    'Foundation Date': foundation['Datetime'].strftime('%Y-%m-%d %H:%M'),
-                    'Foundation Open': round(foundation['Open'], 2),
-                    'Foundation High': round(foundation_high, 2),
-                    'Foundation Low': round(foundation_low, 2),
-                    'Foundation Close': round(foundation_close, 2),
-                    'Current Price': round(current_price, 2),
-                    'Rally %': round(rally_percentage, 2),
-                    'Setup Type': 'Bullish Return' if rally_percentage > 0 else 'Bearish Return'
-                })
-        except Exception as e:
-            print(f"Error processing {symbol}: {e}")
-            continue
-    return pd.DataFrame(results)
 
 def scan_friday_breakout(symbols):
     """
@@ -286,18 +187,12 @@ def display_scanner_page():
     st.sidebar.markdown("### 🔍 Scanner Type")
     scanner_type = st.sidebar.selectbox(
         "Choose Scanner",
-        ["Foundation Candle Returns", "Friday Breakout", "Monthly Marubozu"]
+        ["Friday Breakout", "Monthly Marubozu"]
     )
-    
-    # Scan Parameters
-    st.sidebar.markdown("### ⚙️ Parameters")
-    lookback_days = st.sidebar.slider("Lookback Days", 1, 30, 5)
     
     if st.sidebar.button("🔍 Run Scan"):
         with st.spinner("Scanning stocks..."):
-            if scanner_type == "Foundation Candle Returns":
-                results = scan_foundation_candle_returns(symbols)
-            elif scanner_type == "Friday Breakout":
+            if scanner_type == "Friday Breakout":
                 results = scan_friday_breakout(symbols)
             elif scanner_type == "Monthly Marubozu":
                 results = scan_monthly_marubozu(symbols)
@@ -324,27 +219,3 @@ def display_scanner_page():
             else:
                 st.warning("No setups found matching the criteria.")
     
-    # Individual Stock Analysis
-    st.markdown("---")
-    st.subheader("🔬 Individual Stock Analysis")
-    
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        analysis_symbol = st.text_input("Enter Symbol", "SBIN.NS")
-    with col2:
-        if st.button("Analyze"):
-            if analysis_symbol:
-                foundation = find_foundation_candle(analysis_symbol)
-                if foundation is not None:
-                    st.write("**Foundation Candle Found:**")
-                    st.json({
-                        'Date': foundation['Datetime'].strftime('%Y-%m-%d %H:%M'),
-                        'Open': round(foundation['Open'], 2),
-                        'High': round(foundation['High'], 2),
-                        'Low': round(foundation['Low'], 2),
-                        'Close': round(foundation['Close'], 2),
-                        'Volume': foundation.get('Volume', 'N/A'),
-                        'Body %': round(foundation['Body_Percentage'], 1)
-                    })
-                else:
-                    st.warning("No foundation candle found for this symbol.")

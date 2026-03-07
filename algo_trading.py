@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from scanner import scan_foundation_candle_returns, scan_friday_breakout, scan_monthly_marubozu
+from scanner import scan_friday_breakout, scan_monthly_marubozu
 from upstox_client import UpstoxClient, PaperUpstoxClient
 
 # helper for re-running the app in a version-compatible way
@@ -152,7 +152,7 @@ def display_algo_trading_page():
     
     strategy_type = st.selectbox(
         "Select Strategy",
-        ["Foundation Candle Returns", "Friday Breakout", "Monthly Marubozu"],
+        ["Friday Breakout", "Monthly Marubozu"],
         key="strategy_type"
     )
     
@@ -161,9 +161,7 @@ def display_algo_trading_page():
             st.error("No symbols available for strategy")
         else:
             with st.spinner("Scanning for setups..."):
-                if strategy_type == "Foundation Candle Returns":
-                    setups = scan_foundation_candle_returns(symbols)
-                elif strategy_type == "Friday Breakout":
+                if strategy_type == "Friday Breakout":
                     setups = scan_friday_breakout(symbols)
                 elif strategy_type == "Monthly Marubozu":
                     setups = scan_monthly_marubozu(symbols)
