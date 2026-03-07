@@ -624,8 +624,39 @@ def display_strategies_page():
                 st.time_input("Start Time", value=datetime.now().time())
             
             st.markdown("**Conditions**")
-            st.selectbox("Entry Indicator", ["Moving Average", "MACD", "RSI", "SuperTrend"])
-            st.selectbox("Exit Indicator", ["Moving Average", "MACD", "RSI"])
+            entry_ind = st.selectbox("Entry Indicator", ["Moving Average", "MACD", "RSI", "SuperTrend"], key="entry_ind")
+            if entry_ind == "Moving Average":
+                ecol1, ecol2 = st.columns(2)
+                with ecol1:
+                    st.number_input("Entry MA Length", min_value=1, value=9, key="entry_ma_len")
+                with ecol2:
+                    st.selectbox("Entry MA Type", ["SMA", "EMA", "WMA"], index=1, key="entry_ma_type")
+            elif entry_ind == "MACD":
+                ecol1, ecol2, ecol3 = st.columns(3)
+                with ecol1:
+                    st.number_input("Fast Length", min_value=1, value=12, key="entry_macd_fast")
+                with ecol2:
+                    st.number_input("Slow Length", min_value=1, value=26, key="entry_macd_slow")
+                with ecol3:
+                    st.number_input("Signal Length", min_value=1, value=9, key="entry_macd_sig")
+            elif entry_ind == "RSI":
+                ecol1, ecol2, ecol3 = st.columns(3)
+                with ecol1:
+                    st.number_input("RSI Length", min_value=1, value=14, key="entry_rsi_len")
+                with ecol2:
+                    st.number_input("Overbought", min_value=1, value=70, key="entry_rsi_ob")
+                with ecol3:
+                    st.number_input("Oversold", min_value=1, value=30, key="entry_rsi_os")
+                    
+            exit_ind = st.selectbox("Exit Indicator", ["Moving Average", "MACD", "RSI"], key="exit_ind")
+            if exit_ind == "Moving Average":
+                xcol1, xcol2 = st.columns(2)
+                with xcol1:
+                    st.number_input("Exit MA Length", min_value=1, value=21, key="exit_ma_len")
+                with xcol2:
+                    st.selectbox("Exit MA Type", ["SMA", "EMA", "WMA"], index=1, key="exit_ma_type")
+            elif exit_ind == "RSI":
+                st.number_input("Exit RSI Level", min_value=1, value=50, key="exit_rsi_level")
             
             if st.form_submit_button("Deploy Strategy", use_container_width=True):
                 st.success("✅ Strategy deployed successfully!")
