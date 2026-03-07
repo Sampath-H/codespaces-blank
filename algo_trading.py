@@ -258,6 +258,105 @@ def display_algo_trading_page():
                 except Exception as e:
                     st.error(f"Failed to fetch OHLC data: {e}")
 
+    # WebSocket Live Stream
+    st.markdown("---")
+    st.subheader("⚡ WebSocket Live Stream & Strategy")
+    st.info("Stream real-time tick data using Upstox WebSocket API v3. Data updates automatically without refreshing the page.")
+    
+    # Needs Upstox SDK
+    try:
+        from websocket_client import UpstoxStreamerManager, HAS_UPSTOX_SDK
+    except ImportError:
+        HAS_UPSTOX_SDK = False
+        
+    if not HAS_UPSTOX_SDK:
+        st.warning("⚠️ `upstox-python-sdk` is required for WebSockets. Please deploy with the updated requirements.txt.")
+    else:
+        streamer_mgr = UpstoxStreamerManager()
+        
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            ws_symbols = st.text_input("Stream Instrument Keys (comma-separated)", value="NSE_EQ|INE002A01018,NSE_EQ|INE040H01021", key="ws_symbols")
+        with col2:
+            st.write("Status:")
+            st.write(f"**{st.session_state.get('streamer_status', 'Disconnected 🔴')}**")
+            
+        col3, col4, col5 = st.columns(3)
+        with col3:
+            if st.button("🔌 Connect Stream"):
+                if not api_key or not access_token:
+                    st.error("API credentials required.")
+                else:
+                    streamer_mgr.initialize(api_key, access_token)
+                    keys = [k.strip() for k in ws_symbols.split(",")]
+                    streamer_mgr.subscribe(keys)
+                    safe_rerun()
+        with col4:
+            if st.button("🔄 Update Subscriptions"):
+                keys = [k.strip() for k in ws_symbols.split(",")]
+                streamer_mgr.subscribe(keys)
+                st.success("Subscriptions updated.")
+        with col5:
+            if st.button("🛑 Disconnect"):
+                streamer_mgr.stop()
+                st.session_state["streamer_status"] = "Disconnected 🔴"
+                safe_rerun()
+                
+        # Sample Real-time Strategy: Breakout Catcher
+        st.markdown("#### 🚀 Demo Strategy: Real-time Breakout Catcher")
+        st.write("Enable to trigger alerts if Last Traded Price (LTP) moves sharply while streaming.")
+        enable_alerts = st.toggle("Enable Live Alerts")
+        
+        if enable_alerts:
+            # We store the "last alerted price" to avoid spamming
+            if "alert_history" not in st.session_state:
+                st.session_state["alert_history"] = {}
+                
+            def check_breakout(tick):
+                inst = tick['instrument']
+                ltp = tick['ltp']
+                history = st.session_state["alert_history"]
+                
+                # Dummy logic: if price changes by > 0.5% from the first seen price
+                if inst not in history:
+                    history[inst] = {'initial_price': ltp, 'last_alert_time': 0}
+                else:
+                    initial = history[inst]['initial_price']
+                    change_pct = ((ltp - initial) / initial) * 100
+                    
+                    if abs(change_pct) >= 0.5:
+                        now = time.time()
+                        if now - history[inst]['last_alert_time'] > 60: # Max 1 alert per minute
+                            history[inst]['last_alert_time'] = now
+                            side = "BULLISH 🟢" if change_pct > 0 else "BEARISH 🔴"
+                            st.toast(f"🚨 {side} BREAKOUT on {inst}! Price: ₹{ltp} ({change_pct:+.2f}%)")
+            
+            streamer_mgr.set_callback(check_breakout)
+        else:
+            streamer_mgr.set_callback(None)
+
+        # Autorefreshing UI Fragment for Live Data
+        # Using Streamlit forms/fragments or a simple auto-refresh toggle
+        auto_refresh = st.checkbox("🔄 Auto-refresh Live Table (every 2s)")
+        
+        live_data = streamer_mgr.get_live_data()
+        
+        if live_data:
+            df_live = pd.DataFrame(list(live_data.values()))
+            if 'timestamp' in df_live.columns:
+                df_live['Time'] = pd.to_datetime(df_live['timestamp'], unit='s', utc=True)
+                df_live['Time'] = df_live['Time'].dt.tz_convert('Asia/Kolkata').dt.strftime('%H:%M:%S')
+                df_live.drop(columns=['timestamp'], inplace=True)
+            
+            # Format columns
+            st.dataframe(df_live, use_container_width=True)
+            
+            if auto_refresh:
+                time.sleep(2)
+                safe_rerun()
+        else:
+            st.info("No live data received yet. Connect the stream and wait for market updates.")
+
     # Order History / Paper Orders
     st.markdown("---")
     st.subheader("📋 Order History")
