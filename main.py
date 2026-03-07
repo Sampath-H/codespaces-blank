@@ -156,7 +156,7 @@ def login_page():
         api_key = st.text_input("API Key", value=default_api_key, key="login_api_key")
         api_secret = st.text_input("API Secret", value=default_api_secret, type="password", key="login_api_secret")
 
-        default_redirect = st.session_state.get("redirect_uri", "http://localhost:8501/")
+        default_redirect = st.session_state.get("redirect_uri", "https://codespaces-blank-9j75hn7qzwbp4maugggafc.streamlit.app/")
         if os.environ.get("CODESPACES"):
             cs = os.environ.get("CODESPACE_NAME")
             domain = os.environ.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
@@ -259,12 +259,17 @@ def main():
     
     /* Sidebar Styling */
     [data-testid="stSidebar"] {
-        background-color: #f5f5f5 !important;
-        border-right: 1px solid #e0e0e0;
+        background-color: #1a1a2e !important;
+        border-right: 1px solid #2d2d44;
     }
     
     [data-testid="stSidebar"] [data-testid="stVerticalBlockBg"] {
-        background-color: #f5f5f5 !important;
+        background-color: #1a1a2e !important;
+    }
+    
+    /* Force sidebar text to be visible */
+    [data-testid="stSidebar"] * {
+        color: #e0e0e0 !important;
     }
     
     [data-testid="stSidebar"] .stRadio > label {
@@ -273,15 +278,30 @@ def main():
     }
     
     [data-testid="stSidebar"] .stRadio > label > div {
-        background-color: #f5f5f5 !important;
+        background-color: #252540 !important;
         padding: 0.75rem 1rem !important;
         border-radius: 8px;
         margin-bottom: 0.5rem;
+        color: #e0e0e0 !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio > label > div:hover {
+        background-color: #2d2d50 !important;
     }
     
     [data-testid="stSidebar"] .stRadio > label:has(input:checked) > div {
-        background-color: #e8eef7 !important;
-        color: #003d82;
+        background-color: #003d82 !important;
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4 {
+        color: #ffffff !important;
+    }
+    
+    [data-testid="stSidebar"] .stButton > button {
+        background-color: #ef4444 !important;
+        color: white !important;
+        border: none !important;
     }
     
     /* Header */
