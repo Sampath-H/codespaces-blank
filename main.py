@@ -76,8 +76,13 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = [col[0] for col in df.columns]
                 
+            # Convert timezone to Indian Standard Time (IST)
+            if df.index.tz is None:
+                df.index = df.index.tz_localize('UTC').tz_convert('Asia/Kolkata')
+            else:
+                df.index = df.index.tz_convert('Asia/Kolkata')
+                
             # Filter to Indian Market Hours (9:15 to 15:30)
-            # Yfinance returns data in local timezone or UTC depending on setup, we just use the raw times
             
             # Calculate MAs
             if ma_type == "EMA":
