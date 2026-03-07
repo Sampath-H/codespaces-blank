@@ -237,9 +237,16 @@ class UpstoxClient:
             df = yf.download(ticker, start=from_date, end=to_date, interval=yf_interval, progress=False, auto_adjust=True)
             if df.empty: return {"status": "success", "data": {"candles": []}}
             
+            # Ensure the yfinance index is exactly represented in IST before stringifying
+            if df.index.tz is None:
+                df.index = df.index.tz_localize('UTC').tz_convert('Asia/Kolkata')
+            else:
+                df.index = df.index.tz_convert('Asia/Kolkata')
+                
             candles = []
             for idx, row in df.iterrows():
                 # [timestamp, open, high, low, close, volume, oi]
+                # Format exactly as Upstox expects (IST)
                 candles.append([
                     idx.strftime("%Y-%m-%dT%H:%M:%S+05:30"),
                     row['Open'], row['High'], row['Low'], row['Close'], row.get('Volume', 0), 0
