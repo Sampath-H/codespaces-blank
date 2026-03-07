@@ -192,7 +192,9 @@ def display_algo_trading_page():
                 symbols_df = pd.read_csv("stocks_500.csv")
             else:
                 symbols_df = pd.read_csv("NSE_FO_Stocks_NS.csv")
-            symbols = symbols_df['Symbol'].tolist()
+                
+            col_name = 'Symbol' if 'Symbol' in symbols_df.columns else 'SYMBOL'
+            symbols = symbols_df[col_name].tolist()
             symbols = [s + '.NS' if not s.endswith('.NS') else s for s in symbols]
         except:
             st.error("Could not load stock universe")
