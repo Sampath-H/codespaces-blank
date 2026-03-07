@@ -37,11 +37,13 @@ def main():
 
     print("Connected successfully!")
 
-    # Example instrument keys (NSE stocks)
+    # Example instrument keys (NSE stocks and indices)
     # You can get instrument keys from Upstox API or use their format
     instruments = [
-        "NSE_EQ|INE002A01018",  # Example: RELIANCE
-        "NSE_EQ|INE009A01021",  # Example: HDFC
+        "NSE_EQ|INE002A01018",  # RELIANCE
+        "NSE_EQ|INE009A01021",  # HDFC
+        "NSE_INDEX|Nifty 50",   # Nifty 50 Index
+        "NSE_INDEX|Nifty Bank", # Bank Nifty Index
     ]
 
     # Start live feed
