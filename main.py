@@ -54,23 +54,31 @@ def get_historical_market_days(lookback_selection):
         
     return start_date, end_date
 
-def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback):
+def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback, timeframe="5m"):
     """
-    Simulates the strategy on intraday data (5m) over the specified period.
+    Simulates the strategy over the specified period and timeframe.
     Returns a dataframe of closed trades and summary metrics.
     """
     start_time, end_time = get_historical_market_days(lookback)
     
-    # yfinance needs slightly adjusted dates for intraday fetching
-    yf_start = (start_time - timedelta(days=5)).strftime("%Y-%m-%d") # extra days for MA calc
+    # Enforce yfinance limits
+    if timeframe == "1m":
+        max_start = datetime.now() - timedelta(days=7)
+        if start_time < max_start: start_time = max_start
+    elif timeframe in ["5m", "15m"]:
+        max_start = datetime.now() - timedelta(days=60)
+        if start_time < max_start: start_time = max_start
+    
+    # yfinance needs slightly adjusted dates for historical fetching
+    yf_start = (start_time - timedelta(days=10)).strftime("%Y-%m-%d") # extra days for MA calc
     yf_end = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
     
     all_trades = []
     
     for symbol in symbols:
         try:
-            # Fetch 5-minute intraday data
-            df = yf.download(symbol, start=yf_start, end=yf_end, interval="5m", progress=False, auto_adjust=True)
+            # Fetch data with specified timeframe
+            df = yf.download(symbol, start=yf_start, end=yf_end, interval=timeframe, progress=False, auto_adjust=True)
             if df.empty: continue
                 
             if isinstance(df.columns, pd.MultiIndex):
@@ -99,6 +107,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             if df.empty: continue
             
             in_position = False
+            trade_side = ""
             entry_price = 0
             entry_time = None
             target = 0
@@ -110,13 +119,23 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                 
                 # If we are not in a position, look for a crossover
                 if not in_position:
-                    # Golden Cross
-                    if preview_cross := (current['fast_ma'] > current['slow_ma'] and prev['fast_ma'] <= prev['slow_ma']):
+                    # Golden Cross (Buy / Long Entry)
+                    if current['fast_ma'] > current['slow_ma'] and prev['fast_ma'] <= prev['slow_ma']:
                         in_position = True
+                        trade_side = "BUY"
                         entry_price = round(float(current['Close']), 2)
                         entry_time = df.index[i]
                         target = entry_price * (1 + (target_pct / 100))
                         sl = entry_price * (1 - (sl_pct / 100))
+                        
+                    # Death Cross (Sell / Short Entry)
+                    elif current['fast_ma'] < current['slow_ma'] and prev['fast_ma'] >= prev['slow_ma']:
+                        in_position = True
+                        trade_side = "SELL"
+                        entry_price = round(float(current['Close']), 2)
+                        entry_time = df.index[i]
+                        target = entry_price * (1 - (target_pct / 100)) # Target is lower for shorts
+                        sl = entry_price * (1 + (sl_pct / 100)) # SL is higher for shorts
                 
                 # If we are in a position, check if Target or SL hit
                 else:
@@ -126,24 +145,38 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                     exit_price = 0
                     reason = ""
                     
-                    if high >= target:
-                        exit_price = round(target, 2)
-                        reason = "Target Hit"
-                    elif low <= sl:
-                        exit_price = round(sl, 2)
-                        reason = "Stop Loss Hit"
+                    if trade_side == "BUY":
+                        if high >= target:
+                            exit_price = round(target, 2)
+                            reason = "Target Hit"
+                        elif low <= sl:
+                            exit_price = round(sl, 2)
+                            reason = "Stop Loss Hit"
+                    else: # SELL
+                        if low <= target:
+                            exit_price = round(target, 2)
+                            reason = "Target Hit"
+                        elif high >= sl:
+                            exit_price = round(sl, 2)
+                            reason = "Stop Loss Hit"
                         
-                    # Force exit at 15:25 (Intraday Square-off)
-                    elif current.name.hour == 15 and current.name.minute >= 25:
-                        exit_price = round(float(current['Close']), 2)
-                        reason = "EOD Square-off"
+                    # Force exit at 15:25 (Intraday Square-off) if timeframe is intraday
+                    if "m" in timeframe or "h" in timeframe:
+                        if current.name.hour == 15 and current.name.minute >= 25:
+                            exit_price = round(float(current['Close']), 2)
+                            reason = "EOD Square-off"
                         
                     if exit_price > 0:
-                        pnl = round(exit_price - entry_price, 2)
+                        if trade_side == "BUY":
+                            pnl = round(exit_price - entry_price, 2)
+                        else:
+                            pnl = round(entry_price - exit_price, 2)
+                            
                         pnl_pct = round((pnl / entry_price) * 100, 2)
                         
                         all_trades.append({
                             "Symbol": symbol,
+                            "Side": trade_side,
                             "Entry Time": entry_time.strftime("%Y-%m-%d %H:%M"),
                             "Exit Time": current.name.strftime("%Y-%m-%d %H:%M"),
                             "Entry Price": entry_price,
@@ -834,7 +867,8 @@ def display_backtest_page():
         st.markdown("#### Setup Strategy")
         
         strategy = st.selectbox("Strategy to Backtest", ["Moving Average Crossover"])
-        lookback = st.selectbox("Historical Horizon", ["Today", "Yesterday", "Past 3 Days", "Past 5 Days", "Past 10 Days"])
+        lookback = st.selectbox("Historical Horizon", ["Today", "Yesterday", "Past 3 Days", "Past 5 Days", "Past 10 Days", "Past 30 Days", "Past 90 Days"])
+        timeframe = st.selectbox("Timeframe", ["1m", "5m", "15m", "1h", "1d", "1wk", "1mo"], index=1)
         
         st.markdown("**Parameters**")
         fast_len = st.number_input("Fast MA Length", 1, 200, 9)
@@ -875,8 +909,8 @@ def display_backtest_page():
                 
     with col2:
         if run_btn:
-            with st.spinner(f"Simulating Intraday Trades for {lookback}..."):
-                results_df = run_backtest(symbols, strategy, fast_len, slow_len, ma_type, tp_pct, sl_pct, lookback)
+            with st.spinner(f"Simulating {timeframe} Trades for {lookback}..."):
+                results_df = run_backtest(symbols, strategy, fast_len, slow_len, ma_type, tp_pct, sl_pct, lookback, timeframe)
                 
             if results_df.empty:
                 st.warning(f"No completed trades found during {lookback}.")
