@@ -429,7 +429,7 @@ class PaperUpstoxClient(UpstoxClient):
             master_df = pd.read_csv(csv_url, compression='gzip')
             
             # Filter for Equities matching the tradingsymbol
-            eq_df = master_df[(master_df['instrument_type'] == 'EQ') & (master_df['tradingsymbol'] == clean_symbol)]
+            eq_df = master_df[(master_df['instrument_type'] == 'EQUITY') & (master_df['tradingsymbol'] == clean_symbol)]
             if not eq_df.empty:
                 return eq_df.iloc[0]['instrument_key']
             else:
