@@ -111,8 +111,21 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                 
             resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
             
+            # Upstox might return empty candles if the market just opened, or it's a holiday, or API is delayed.
+            # Instead of failing immediately, just try fetching the previous trading day's data up to 5 times.
+            max_retries = 5
+            attempt = 0
+            while attempt < max_retries and (resp.get('status') != 'success' or not resp.get('data', {}).get('candles')):
+                attempt += 1
+                # Shift both dates backward by 1 day
+                end_time_dt = datetime.strptime(end_str, "%Y-%m-%d") - timedelta(days=1)
+                start_time_dt = datetime.strptime(start_str, "%Y-%m-%d") - timedelta(days=1)
+                end_str = end_time_dt.strftime("%Y-%m-%d")
+                start_str = start_time_dt.strftime("%Y-%m-%d")
+                resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
+            
             if resp.get('status') != 'success' or not resp['data']['candles']:
-                st.error(f"❌ Upstox API Error for {symbol}: {resp.get('message', 'No data returned. Check your Upstox Login status.')}")
+                st.error(f"❌ Upstox API Error for {symbol} after {max_retries} offset attempts: {resp.get('message', 'No data returned. Check your Upstox Login status or market holidays.')}")
                 continue
                 
             # Upstox returns oldest last. Reverse it so chronological.
