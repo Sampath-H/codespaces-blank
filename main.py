@@ -72,15 +72,22 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     end_str_base = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
     
     # Map timeframe to Upstox supported natively
-    if timeframe in ["1m", "5m", "15m"]:
+    # FIXED: each TF now maps to its own interval so we don't over-fetch 1m data
+    if timeframe == "1m":
         upstox_tf = "1minute"
-    elif timeframe in ["30m", "1h"]:
+    elif timeframe == "5m":
+        upstox_tf = "5minute"      # FIXED: was "1minute" causing wrong resampling
+    elif timeframe == "15m":
+        upstox_tf = "15minute"     # FIXED: was "1minute"
+    elif timeframe == "30m":
         upstox_tf = "30minute"
-    elif timeframe in ["1d"]:
+    elif timeframe == "1h":
+        upstox_tf = "1hour"        # FIXED: was "30minute"
+    elif timeframe == "1d":
         upstox_tf = "day"
-    elif timeframe in ["1wk"]:
+    elif timeframe == "1wk":
         upstox_tf = "week"
-    elif timeframe in ["1mo"]:
+    elif timeframe == "1mo":
         upstox_tf = "month"
     else:
         upstox_tf = "day"
@@ -160,12 +167,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             for col in ['Open', 'High', 'Low', 'Close']:
                 df[col] = df[col].astype(float)
             
-            # 1b. RESAMPLE IF NEEDED (since Upstox only gives 1m, 30m, day strictly)
-            if timeframe in ["5m", "15m"]:
-                rule = "5T" if timeframe == "5m" else "15T"
-                df = df.resample(rule).agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum', 'OI': 'last'}).dropna()
-            elif timeframe == "1h":
-                df = df.resample('1H').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum', 'OI': 'last'}).dropna()
+            # No resampling needed — each timeframe now fetches its native interval directly
                 
             
             # 2. RUN INDICATORS ON SPOT DATA
