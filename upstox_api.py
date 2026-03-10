@@ -442,6 +442,10 @@ class PaperUpstoxClient(UpstoxClient):
 
     def get_orders(self) -> Any:
         return list(self.orders)
+        
+    def get_live_intraday(self, instrument_key: str, interval: str) -> Optional[dict]:
+        """Mock implementation of live intraday fetching for Paper trading mode"""
+        return {"status": "success", "data": {"candles": []}}
 
     def cancel_order(self, order_id: str) -> Any:
         for o in self.orders:
