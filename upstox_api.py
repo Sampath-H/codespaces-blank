@@ -205,22 +205,37 @@ class UpstoxClient:
         return resp.json()
 
     def get_historical_candle(self, instrument_key: str, interval: str, to_date: str, from_date: str) -> Any:
-        """Fetch historical candle data for a specific instrument.
+        """Fetch historical candle data for a specific instrument. Handles large date ranges by chunking backwards."""
+        from datetime import datetime, timedelta
         
-        Args:
-            instrument_key: e.g. 'NSE_INDEX|Nifty 50' or 'NSE_FO|12345'
-            interval: '1minute', '30minute', 'day', etc.
-            to_date: 'YYYY-MM-DD'
-            from_date: 'YYYY-MM-DD'
-        """
-        url = self._url(f"/historical-candle/{instrument_key}/{interval}/{to_date}/{from_date}")
-        resp = self.session.get(url)
-        try:
-            resp.raise_for_status()
-            return resp.json()
-        except requests.HTTPError as e:
-            print(f"Historical API Error: {resp.text}")
-            return {"status": "error", "data": {"candles": []}}
+        t_d = datetime.strptime(to_date, "%Y-%m-%d")
+        f_d = datetime.strptime(from_date, "%Y-%m-%d")
+        
+        all_candles = []
+        current_to = t_d
+        
+        # Upstox restricts ~30 days per API call for intraday data. We will chunk backwards by 25 days to maintain newest-first order.
+        while current_to >= f_d:
+            current_from = max(current_to - timedelta(days=25), f_d)
+            
+            url = self._url(f"/historical-candle/{instrument_key}/{interval}/{current_to.strftime('%Y-%m-%d')}/{current_from.strftime('%Y-%m-%d')}")
+            
+            resp = self.session.get(url)
+            try:
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("status") == "success" and data.get("data", {}).get("candles"):
+                    # Since Upstox returns newest first, appending newest chunks first keeps the entire array newest-first overall!
+                    all_candles.extend(data["data"]["candles"])
+            except requests.HTTPError as e:
+                print(f"Historical API Error for {current_from} to {current_to}: {resp.text}")
+                
+            if current_from == f_d:
+                break
+                
+            current_to = current_from - timedelta(days=1)
+            
+        return {"status": "success", "data": {"candles": all_candles}}
             
     def resolve_options_contract(self, underlying: str, spot_price: float, trade_date: datetime, expiry_type: str="Weekly", option_type: str="CE", strike_offset: int=0) -> Optional[dict]:
         """
