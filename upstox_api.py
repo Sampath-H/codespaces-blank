@@ -194,16 +194,28 @@ class UpstoxClient:
 
     @staticmethod
     def _yfinance_historical(instrument_key: str, interval: str, from_date: str, to_date: str) -> dict:
-        """Fallback: fetch historical OHLCV from yfinance when using MOCK token."""
+        """
+        Robust yfinance fallback. Handles:
+          - Newer yfinance MultiIndex columns
+          - ^NSEI intraday availability limits
+          - After-hours / weekend empty responses
+        """
         import yfinance as yf
         import pandas as pd
-        from datetime import datetime, timedelta
+        import pytz
+        from datetime import datetime, timedelta, time as dtime
 
         KEY_MAP = {
             "NSE_INDEX|Nifty 50":        "^NSEI",
             "NSE_INDEX|Nifty Bank":      "^NSEBANK",
             "BSE_INDEX|SENSEX":          "^BSESN",
             "NSE_INDEX|NIFTY MIDCAP 50": "^NSEMDCP50",
+        }
+        # Proxy fallback if index symbol fails (ETFs usually work)
+        PROXY_MAP = {
+            "^NSEI":    "NIFTYBEES.NS",
+            "^NSEBANK": "BANKBEES.NS",
+            "^BSESN":   "SENSEXBEES.NS",
         }
 
         if instrument_key in KEY_MAP:
@@ -223,44 +235,104 @@ class UpstoxClient:
             "week":     "1wk",
             "month":    "1mo",
         }
-        yf_interval = INTERVAL_MAP.get(interval, "5m")
+        yf_interval   = INTERVAL_MAP.get(interval, "5m")
+        is_intraday   = yf_interval not in ("1d", "1wk", "1mo")
+        IST           = pytz.timezone("Asia/Kolkata")
 
-        try:
-            # yfinance only keeps 60 days of 1m data, 730 days of daily
-            df = yf.download(
-                yf_symbol,
-                start=from_date,
-                end=to_date,
-                interval=yf_interval,
-                progress=False,
-                auto_adjust=True,
-            )
+        def _fetch(sym):
+            """Try Ticker.history() — more reliable than yf.download() for recent data."""
+            try:
+                ticker = yf.Ticker(sym)
+                if is_intraday:
+                    # Use period= for intraday so yfinance picks the right window
+                    from_dt  = datetime.strptime(from_date, "%Y-%m-%d")
+                    to_dt    = datetime.strptime(to_date,   "%Y-%m-%d")
+                    days_ago = (datetime.today() - from_dt).days
+                    # yfinance caps: 1m=7days, 5m/15m/30m=60days, 1h=730days
+                    period   = f"{min(max(days_ago + 2, 2), 59)}d"
+                    df = ticker.history(period=period, interval=yf_interval)
+                else:
+                    df = ticker.history(start=from_date, end=to_date, interval=yf_interval)
+                return df
+            except Exception as e:
+                print(f"[yfinance] {sym} fetch error: {e}")
+                return pd.DataFrame()
+
+        def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+            """Handle MultiIndex columns from newer yfinance versions."""
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = [col[0] for col in df.columns]
+            return df
+
+        def _df_to_candles(df: pd.DataFrame) -> list:
+            """Convert yfinance DataFrame → Upstox-style candle list (newest first)."""
             if df.empty:
-                return {"status": "success", "data": {"candles": []}}
-
+                return []
+            df = _flatten_columns(df)
             df = df.reset_index()
+
+            # Timestamp column name varies: Datetime / Date / index
+            ts_col = None
+            for c in ["Datetime", "Date", "index", "timestamp"]:
+                if c in df.columns:
+                    ts_col = c
+                    break
+            if ts_col is None:
+                return []
+
             candles = []
             for _, row in df.iterrows():
-                ts = row.get("Datetime", row.get("Date", None))
-                if ts is None:
-                    continue
-                if not isinstance(ts, pd.Timestamp):
-                    ts = pd.Timestamp(ts)
-                candles.append([
-                    ts.isoformat(),
-                    float(row["Open"]),
-                    float(row["High"]),
-                    float(row["Low"]),
-                    float(row["Close"]),
-                    float(row.get("Volume", 0)),
-                    0,
-                ])
-            candles.reverse()  # newest first, matches Upstox API
-            return {"status": "success", "data": {"candles": candles}}
+                try:
+                    ts = row[ts_col]
+                    if not isinstance(ts, pd.Timestamp):
+                        ts = pd.Timestamp(ts)
 
-        except Exception as e:
-            print(f"[yfinance fallback] Error fetching {yf_symbol}: {e}")
-            return {"status": "success", "data": {"candles": []}}
+                    # Convert to IST
+                    if ts.tzinfo is None:
+                        ts = ts.tz_localize("UTC")
+                    ts_ist = ts.tz_convert(IST)
+
+                    # Filter to market hours for intraday
+                    if is_intraday:
+                        t = ts_ist.time()
+                        if not (dtime(9, 15) <= t <= dtime(15, 30)):
+                            continue
+
+                    # Filter to requested date range
+                    ts_date = ts_ist.date()
+                    from_d  = datetime.strptime(from_date, "%Y-%m-%d").date()
+                    to_d    = datetime.strptime(to_date,   "%Y-%m-%d").date()
+                    if not (from_d <= ts_date <= to_d):
+                        continue
+
+                    o = float(row.get("Open",  row.get("open",  0)))
+                    h = float(row.get("High",  row.get("high",  0)))
+                    l = float(row.get("Low",   row.get("low",   0)))
+                    c = float(row.get("Close", row.get("close", 0)))
+                    v = float(row.get("Volume",row.get("volume",0)))
+
+                    if c == 0:
+                        continue
+
+                    candles.append([ts_ist.isoformat(), o, h, l, c, v, 0])
+                except Exception:
+                    continue
+
+            candles.reverse()   # newest first (Upstox convention)
+            return candles
+
+        # 1. Try primary symbol
+        df = _fetch(yf_symbol)
+        candles = _df_to_candles(df)
+
+        # 2. Proxy fallback (e.g. ^NSEI → NIFTYBEES.NS) if primary returned nothing
+        if not candles and yf_symbol in PROXY_MAP:
+            proxy = PROXY_MAP[yf_symbol]
+            print(f"[yfinance] {yf_symbol} empty, trying proxy {proxy}")
+            df = _fetch(proxy)
+            candles = _df_to_candles(df)
+
+        return {"status": "success", "data": {"candles": candles}}
 
     def resolve_options_contract(self, underlying, spot_price, trade_date,
                                   expiry_type="Weekly", option_type="CE", strike_offset=0):
