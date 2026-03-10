@@ -107,35 +107,45 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             sym_end_str = end_str_base
             
             # 1. FETCH SPOT DATA
-            if symbol == "NIFTY":
+            # Map well-known index names
+            if symbol in ("NIFTY", "NIFTY50", "NSE:NIFTY"):
                 instrument = "NSE_INDEX|Nifty 50"
-            elif symbol == "BANKNIFTY":
+            elif symbol in ("BANKNIFTY", "NIFTYBANK", "NSE:BANKNIFTY"):
                 instrument = "NSE_INDEX|Nifty Bank"
-            elif symbol == "SENSEX":
+            elif symbol in ("SENSEX", "BSE:SENSEX"):
                 instrument = "BSE_INDEX|SENSEX"
             else:
-                instrument = client.get_equity_instrument_token(symbol)
-                if not instrument:
-                    st.error(f"❌ Cannot find Upstox Master Contract for {symbol}. Is the ticker name exactly right?")
-                    continue
+                # For equity symbols (e.g. RELIANCE.NS or RELIANCE)
+                if access_token == "MOCK_TOKEN_FOR_TESTING":
+                    # MOCK mode: skip Upstox CSV lookup — build key directly so
+                    # _yfinance_historical can resolve it via yfinance (.NS suffix)
+                    clean = symbol.replace(".NS", "").strip().upper()
+                    instrument = f"NSE_EQ|{clean}"
+                else:
+                    # Real token: resolve exact Upstox instrument key from master CSV
+                    instrument = client.get_equity_instrument_token(symbol)
+                    if not instrument:
+                        st.error(f"❌ Cannot find Upstox Master Contract for {symbol}. Is the ticker name exactly right?")
+                        continue
                 
             resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
             
-            # Upstox might return empty candles if the market just opened, or it's a holiday, or API is delayed.
-            # Instead of failing immediately, just try fetching the previous trading day's data up to 5 times.
-            max_retries = 5
-            attempt = 0
-            while attempt < max_retries and (resp.get('status') != 'success' or not resp.get('data', {}).get('candles')):
-                attempt += 1
-                # Shift both dates backward by 1 day
-                end_time_dt = datetime.strptime(sym_end_str, "%Y-%m-%d") - timedelta(days=1)
-                start_time_dt = datetime.strptime(sym_start_str, "%Y-%m-%d") - timedelta(days=1)
-                sym_end_str = end_time_dt.strftime("%Y-%m-%d")
-                sym_start_str = start_time_dt.strftime("%Y-%m-%d")
-                resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
+            # In MOCK/yfinance mode we skip the retry loop — yfinance already handles
+            # date ranges internally and retrying just wastes time.
+            if access_token != "MOCK_TOKEN_FOR_TESTING":
+                # Real Upstox API: retry up to 5 times shifting dates back 1 day
+                max_retries = 5
+                attempt = 0
+                while attempt < max_retries and (resp.get("status") != "success" or not resp.get("data", {}).get("candles")):
+                    attempt += 1
+                    end_time_dt   = datetime.strptime(sym_end_str,   "%Y-%m-%d") - timedelta(days=1)
+                    start_time_dt = datetime.strptime(sym_start_str, "%Y-%m-%d") - timedelta(days=1)
+                    sym_end_str   = end_time_dt.strftime("%Y-%m-%d")
+                    sym_start_str = start_time_dt.strftime("%Y-%m-%d")
+                    resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
             
-            if resp.get('status') != 'success' or not resp['data']['candles']:
-                st.error(f"❌ Upstox API Error for {symbol} after {max_retries} offset attempts: {resp.get('message', 'No data returned. Check your Upstox Login status or market holidays.')}")
+            if resp.get("status") != "success" or not resp["data"]["candles"]:
+                st.error(f"❌ No data for {symbol}. Check your Upstox Login status or try a different date range.")
                 continue
                 
             # Upstox returns newest first. Reverse to oldest first.
