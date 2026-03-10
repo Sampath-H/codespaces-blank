@@ -57,7 +57,7 @@ def get_historical_market_days(lookback_selection):
         
     return start_date, end_date
 
-def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback, timeframe="5m", enable_options=False, opt_type=None, expiry_type=None, strike_selection=None):
+def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback, timeframe="5m", enable_options=False, opt_type=None, expiry_type=None, strike_selection=None, allow_carryover=False):
     """
     Simulates the strategy over the specified period and timeframe.
     Returns a dataframe of closed trades and summary metrics.
@@ -68,8 +68,8 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     
     # Dates for Upstox (YYYY-MM-DD)
     # Pad by 30 days so long MAs (e.g. 200 EMA) can calculate before the simulation starts!
-    start_str = (start_time - timedelta(days=30)).strftime("%Y-%m-%d")
-    end_str = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
+    start_str_base = (start_time - timedelta(days=30)).strftime("%Y-%m-%d")
+    end_str_base = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
     
     # Map timeframe to Upstox supported natively
     if timeframe in ["1m", "5m", "15m"]:
@@ -96,6 +96,9 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     
     for symbol in symbols:
         try:
+            sym_start_str = start_str_base
+            sym_end_str = end_str_base
+            
             # 1. FETCH SPOT DATA
             if symbol == "NIFTY":
                 instrument = "NSE_INDEX|Nifty 50"
@@ -109,7 +112,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                     st.error(f"❌ Cannot find Upstox Master Contract for {symbol}. Is the ticker name exactly right?")
                     continue
                 
-            resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
+            resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
             
             # Upstox might return empty candles if the market just opened, or it's a holiday, or API is delayed.
             # Instead of failing immediately, just try fetching the previous trading day's data up to 5 times.
@@ -118,11 +121,11 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             while attempt < max_retries and (resp.get('status') != 'success' or not resp.get('data', {}).get('candles')):
                 attempt += 1
                 # Shift both dates backward by 1 day
-                end_time_dt = datetime.strptime(end_str, "%Y-%m-%d") - timedelta(days=1)
-                start_time_dt = datetime.strptime(start_str, "%Y-%m-%d") - timedelta(days=1)
-                end_str = end_time_dt.strftime("%Y-%m-%d")
-                start_str = start_time_dt.strftime("%Y-%m-%d")
-                resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
+                end_time_dt = datetime.strptime(sym_end_str, "%Y-%m-%d") - timedelta(days=1)
+                start_time_dt = datetime.strptime(sym_start_str, "%Y-%m-%d") - timedelta(days=1)
+                sym_end_str = end_time_dt.strftime("%Y-%m-%d")
+                sym_start_str = start_time_dt.strftime("%Y-%m-%d")
+                resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
             
             if resp.get('status') != 'success' or not resp['data']['candles']:
                 st.error(f"❌ Upstox API Error for {symbol} after {max_retries} offset attempts: {resp.get('message', 'No data returned. Check your Upstox Login status or market holidays.')}")
@@ -296,8 +299,8 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                                 exit_price = round(sl, 2)
                                 reason = "Stop Loss Hit"
                         
-                    # Force Intraday exit
-                    if "minute" in upstox_tf:
+                    # Force Intraday exit if not holding
+                    if "minute" in upstox_tf and not allow_carryover:
                         if current.name.hour == 15 and current.name.minute >= 25:
                             if exit_price == 0: # Not hit yet
                                 if enable_options and premium_df is not None:
@@ -1024,6 +1027,8 @@ def display_backtest_page():
         sl_pct = st.number_input("Stop Loss (%)", 0.1, 10.0, 1.0, step=0.1)
         # Options UI Removed per user request
         opt_type, expiry_type, strike_selection, enable_options = None, None, None, False
+        
+        allow_carryover = st.checkbox("Allow Multi-Day Carryover (Ignore 3:25 PM Exit)", value=True, help="If enabled, intraday trades won't be forcefully closed at the end of the day, allowing them to ride big swing trends.")
             
         run_btn = st.button("▶️ Run Backtest", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1062,7 +1067,7 @@ def display_backtest_page():
             with st.spinner(f"Simulating {timeframe} Trades for {lookback}..."):
                 results_df = run_backtest(
                     symbols, strategy, fast_len, slow_len, ma_type, tp_pct, sl_pct, lookback, timeframe,
-                    enable_options, opt_type, expiry_type, strike_selection
+                    enable_options, opt_type, expiry_type, strike_selection, allow_carryover
                 )
                 
             if results_df.empty:
