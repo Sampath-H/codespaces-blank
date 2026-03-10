@@ -236,6 +236,28 @@ class UpstoxClient:
             current_to = current_from - timedelta(days=1)
             
         return {"status": "success", "data": {"candles": all_candles}}
+        
+    def get_live_intraday(self, instrument_key: str, interval: str) -> Optional[dict]:
+        """Fetch today's live intraday candles from Upstox.
+        Upstox handles units differently for this endpoint (e.g., '1minute' -> 'minute', '5minute' -> 'minute').
+        """
+        unit = "minute"
+        interv = "1"
+        if interval == "1minute": interv = "1"
+        elif interval == "5minute": interv = "5"
+        elif interval == "15minute": interv = "15"
+        elif interval == "30minute": interv = "30"
+        elif interval == "1hour": interv = "1"; unit = "hour"
+        elif interval == "day": interv = "1"; unit = "day"
+        
+        url = self._url(f"/historical-candle/intraday/{instrument_key}/{unit}/{interv}")
+        resp = self.session.get(url)
+        try:
+            resp.raise_for_status()
+            return resp.json()
+        except requests.HTTPError as e:
+            print(f"Intraday API Error: {resp.text}")
+            return {"status": "error", "data": {"candles": []}}
             
     def resolve_options_contract(self, underlying: str, spot_price: float, trade_date: datetime, expiry_type: str="Weekly", option_type: str="CE", strike_offset: int=0) -> Optional[dict]:
         """

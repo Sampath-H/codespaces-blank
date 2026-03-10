@@ -131,20 +131,30 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                 st.error(f"❌ Upstox API Error for {symbol} after {max_retries} offset attempts: {resp.get('message', 'No data returned. Check your Upstox Login status or market holidays.')}")
                 continue
                 
-            # Upstox returns oldest last. Reverse it so chronological.
+            # Upstox returns newest first. Reverse to oldest first.
             candles = resp['data']['candles'][::-1]
+            
+            # If end_str_base includes today, also fetch live intraday and merge
+            ist_today = datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d")
+            if end_str_base >= ist_today and "minute" in upstox_tf:
+                live_resp = client.get_live_intraday(instrument, upstox_tf)
+                if live_resp and live_resp.get('status') == 'success' and live_resp.get('data', {}).get('candles'):
+                    live_candles = live_resp['data']['candles'][::-1]
+                    candles.extend(live_candles)
+                    
             df = pd.DataFrame(candles, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'OI'])
             
             # Convert timezone safely
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df.set_index('timestamp', inplace=True)
             
-            # If the index already has timezone info (like +05:30), just convert its representation to Asia/Kolkata
-            # If it's timezone-naive, assume it is ALREADY IST (because Upstox mock/real API returns IST), so just localize it
             if df.index.tz is not None:
                 df.index = df.index.tz_convert('Asia/Kolkata')
             else:
                 df.index = df.index.tz_localize('Asia/Kolkata')
+                
+            # Drop duplicates if intraday and historical overlapped
+            df = df[~df.index.duplicated(keep='last')]
             
             # Convert cols to float
             for col in ['Open', 'High', 'Low', 'Close']:
@@ -168,11 +178,23 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                 
             df.dropna(inplace=True)
             
-            # Filter strictly to simulation window
+            # Filter strictly to simulation window AND Market Hours (09:15 to 15:30)
             df = df[df.index.date >= start_time.date()]
+            if "minute" in upstox_tf:
+                df = df[(df.index.time >= pd.to_datetime('09:15').time()) & (df.index.time <= pd.to_datetime('15:30').time())]
+            
             if df.empty: 
                 st.warning(f"⚠️ No market data found for {symbol} within the selected timeframe ({start_time.date()} to {end_time.date()}).")
                 continue
+            
+            # Vectorized Signal Generation (100x Faster than looping)
+            df["signal"] = 0
+            pf = df["fast_ma"].shift(1)
+            ps = df["slow_ma"].shift(1)
+            # Golden Cross -> BUY (1)
+            df.loc[(df["fast_ma"] > df["slow_ma"]) & (pf <= ps), "signal"] = 1
+            # Death Cross -> SELL (-1)
+            df.loc[(df["fast_ma"] < df["slow_ma"]) & (pf >= ps), "signal"] = -1
             
             in_position = False
             trade_side = ""
@@ -186,24 +208,35 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             option_symbol = ""
             premium_df = None
             
+            # Convert critical columns to numpy arrays for extremely fast loop logic
+            timestamps = df.index
+            closes = df['Close'].values
+            highs = df['High'].values
+            lows = df['Low'].values
+            signals = df['signal'].values
+            hours = df.index.hour.values
+            minutes = df.index.minute.values
+            
             # 3. RUN SIMULATION LOOP
-            for i in range(1, len(df)):
-                current = df.iloc[i]
-                prev = df.iloc[i-1]
+            for i in range(1, len(closes)):
+                current_close = closes[i]
+                current_high = highs[i]
+                current_low = lows[i]
+                current_ts = timestamps[i]
+                current_signal = signals[i]
                 
                 # A) NOT IN POSITION -> LOOK FOR ENTRY ON SPOT
                 if not in_position:
-                    # Check Golden Cross vs Death Cross on Spot
-                    signal = ""
-                    if current['fast_ma'] > current['slow_ma'] and prev['fast_ma'] <= prev['slow_ma']:
-                        signal = "BUY"
-                    elif current['fast_ma'] < current['slow_ma'] and prev['fast_ma'] >= prev['slow_ma']:
-                        signal = "SELL"
+                    signal_dir = ""
+                    if current_signal == 1:
+                        signal_dir = "BUY"
+                    elif current_signal == -1:
+                        signal_dir = "SELL"
                         
-                    if signal:
+                    if signal_dir:
                         in_position = True
-                        entry_time = df.index[i]
-                        spot_price = float(current['Close'])
+                        entry_time = current_ts
+                        spot_price = float(current_close)
                         
                         if enable_options:
                             # Resolve the Option Contract!
@@ -219,12 +252,16 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                             lot_size = opt_data['lot_size']
                             
                             # Fetch 1m Premium History for exact execution
-                            prem_resp = client.get_historical_candle(opt_data['instrument_token'], "1minute", end_str, entry_time.strftime("%Y-%m-%d"))
+                            prem_resp = client.get_historical_candle(opt_data['instrument_token'], "1minute", end_str_base, entry_time.strftime("%Y-%m-%d"))
                             if prem_resp.get('status') == 'success' and prem_resp['data']['candles']:
                                 p_candles = prem_resp['data']['candles'][::-1]
                                 premium_df = pd.DataFrame(p_candles, columns=['timestamp', 'Open', 'High', 'Low', 'Close', 'Volume', 'OI'])
                                 premium_df['timestamp'] = pd.to_datetime(premium_df['timestamp'])
                                 premium_df.set_index('timestamp', inplace=True)
+                                if premium_df.index.tz is None:
+                                    premium_df.index = premium_df.index.tz_localize('UTC').tz_convert('Asia/Kolkata')
+                                else:
+                                    premium_df.index = premium_df.index.tz_convert('Asia/Kolkata')
                                 
                                 # Find premium at exact entry time
                                 entry_idx = premium_df[premium_df.index >= entry_time]
@@ -244,7 +281,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                             
                         else:
                             # Standard Spot Equity execution
-                            trade_side = signal
+                            trade_side = signal_dir
                             entry_price = round(spot_price, 2)
                             lot_size = 1
                             option_symbol = symbol
@@ -260,56 +297,53 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                 else:
                     exit_price = 0
                     reason = ""
-                    exit_time = current.name
+                    exit_time = current_ts
                     
                     if enable_options and premium_df is not None:
                         # Scan 1-min premium chart from entry time to current loop time
-                        active_premiums = premium_df[(premium_df.index > entry_time) & (premium_df.index <= current.name)]
+                        active_premiums = premium_df[(premium_df.index > entry_time) & (premium_df.index <= current_ts)]
                         for p_idx, p_row in active_premiums.iterrows():
-                            high = float(p_row['High'])
-                            low = float(p_row['Low'])
+                            p_high = float(p_row['High'])
+                            p_low = float(p_row['Low'])
                             
-                            if high >= target:
+                            if p_high >= target:
                                 exit_price = round(target, 2)
                                 reason = "Target Hit"
                                 exit_time = p_idx
                                 break
-                            elif low <= sl:
+                            elif p_low <= sl:
                                 exit_price = round(sl, 2)
                                 reason = "Stop Loss Hit"
                                 exit_time = p_idx
                                 break
                     else:
                         # Standard Equity scan
-                        high = float(current['High'])
-                        low = float(current['Low'])
-                        
                         if trade_side == "BUY":
-                            if high >= target:
+                            if current_high >= target:
                                 exit_price = round(target, 2)
                                 reason = "Target Hit"
-                            elif low <= sl:
+                            elif current_low <= sl:
                                 exit_price = round(sl, 2)
                                 reason = "Stop Loss Hit"
                         else: # SELL
-                            if low <= target:
+                            if current_low <= target:
                                 exit_price = round(target, 2)
                                 reason = "Target Hit"
-                            elif high >= sl:
+                            elif current_high >= sl:
                                 exit_price = round(sl, 2)
                                 reason = "Stop Loss Hit"
                         
                     # Force Intraday exit if not holding
                     if "minute" in upstox_tf and not allow_carryover:
-                        if current.name.hour == 15 and current.name.minute >= 25:
+                        if hours[i] == 15 and minutes[i] >= 25:
                             if exit_price == 0: # Not hit yet
                                 if enable_options and premium_df is not None:
-                                    last_p = premium_df[premium_df.index <= current.name]
+                                    last_p = premium_df[premium_df.index <= current_ts]
                                     exit_price = round(float(last_p.iloc[-1]['Close']), 2) if not last_p.empty else entry_price
                                 else:
-                                    exit_price = round(float(current['Close']), 2)
+                                    exit_price = round(float(current_close), 2)
                                 reason = "EOD Square-off"
-                                exit_time = current.name
+                                exit_time = current_ts
                         
                     if exit_price > 0:
                         if trade_side == "BUY":
