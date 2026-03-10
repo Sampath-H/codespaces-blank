@@ -34,27 +34,45 @@ import pytz
 # ---------------------------------------------------------------------------
 def get_historical_market_days(lookback_selection):
     """Calculate the start and end dates based on the dropdown selection, skipping weekends."""
+    import datetime as _dt
     ist = pytz.timezone('Asia/Kolkata')
-    today = datetime.now(ist)
+    now = datetime.now(ist)
+
+    MARKET_OPEN  = _dt.time(9,  15)
+    MARKET_CLOSE = _dt.time(15, 30)
+    is_market_open = (now.weekday() < 5 and MARKET_OPEN <= now.time() <= MARKET_CLOSE)
+
+    # "Today" after market close → use last trading day so intraday data exists
+    def last_trading_day(dt):
+        d = dt
+        while d.weekday() >= 5:
+            d -= timedelta(days=1)
+        return d
+
+    today = now
     end_date = today
-    
+
     if lookback_selection == "Today":
-        start_date = today
+        if is_market_open:
+            start_date = today           # live session
+        else:
+            # Market closed — use last trading day so yfinance returns real candles
+            start_date = last_trading_day(today - timedelta(days=1) if today.weekday() >= 5 else today)
+            end_date   = start_date
     elif lookback_selection == "Yesterday":
-        start_date = today - timedelta(days=1)
-        while start_date.weekday() >= 5: # Skip weekends
-            start_date -= timedelta(days=1)
+        start_date = last_trading_day(today - timedelta(days=1))
+        end_date   = start_date
     elif "Past" in lookback_selection:
         days_to_look_back = int(lookback_selection.split(" ")[1])
         start_date = today
         days_counted = 0
         while days_counted < days_to_look_back:
             start_date -= timedelta(days=1)
-            if start_date.weekday() < 5: # Mon-Fri
+            if start_date.weekday() < 5:
                 days_counted += 1
     else:
         start_date = today - timedelta(days=30)
-        
+
     return start_date, end_date
 
 def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pct, lookback, timeframe="5m", enable_options=False, opt_type=None, expiry_type=None, strike_selection=None, allow_carryover=False):
@@ -100,12 +118,39 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     client = PaperUpstoxClient(api_key, api_secret, access_token)
     
     all_trades = []
-    
+
+    # Symbols that are delisted, merged, or renamed on NSE — map to correct yfinance ticker
+    # Add more here as needed
+    SYMBOL_ALIAS = {
+        # Merged into another entity
+        "HDFC.NS":        "HDFCBANK.NS",     # HDFC Ltd merged with HDFC Bank Apr 2023
+        "HDFC":           "HDFCBANK.NS",
+        # Renamed
+        "MINDTREE.NS":    "LTIM.NS",         # MindTree + L&T Infotech = LTIMindtree
+        "MINDTREE":       "LTIM.NS",
+        "LTMINDTREE.NS":  "LTIM.NS",
+        "LTTECHNO.NS":    "LTTS.NS",
+        # Special character symbols yfinance can't parse
+        "MCDOWELL-N.NS":  "UNITDSPR.NS",     # United Spirits
+        "MCDOWELL-N":     "UNITDSPR.NS",
+        "M&M.NS":         "M&M.NS",          # yfinance handles this ok
+        "M&MFIN.NS":      "M&MFIN.NS",
+        # Other common renames
+        "IBULHSGFIN.NS":  "IBULHSGFIN.NS",   # may be delisted — will skip gracefully
+        "IDFC.NS":        "IDFCFIRSTB.NS",   # IDFC → IDFC First Bank
+        "L&TFH.NS":       "L&TFH.NS",
+        "GMRINFRA.NS":    "GMRAIRPORT.NS",   # GMR Infra → GMR Airports
+    }
+
+    skipped_symbols = []   # collect silently — show summary at end
+    scanned_count   = 0
+
     for symbol in symbols:
         try:
             sym_start_str = start_str_base
-            sym_end_str = end_str_base
-            
+            sym_end_str   = end_str_base
+            scanned_count += 1
+
             # 1. FETCH SPOT DATA
             # Map well-known index names
             if symbol in ("NIFTY", "NIFTY50", "NSE:NIFTY"):
@@ -115,25 +160,21 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             elif symbol in ("SENSEX", "BSE:SENSEX"):
                 instrument = "BSE_INDEX|SENSEX"
             else:
-                # For equity symbols (e.g. RELIANCE.NS or RELIANCE)
                 if access_token == "MOCK_TOKEN_FOR_TESTING":
-                    # MOCK mode: skip Upstox CSV lookup — build key directly so
-                    # _yfinance_historical can resolve it via yfinance (.NS suffix)
-                    clean = symbol.replace(".NS", "").strip().upper()
+                    # Apply alias map first (handles delisted / renamed symbols)
+                    resolved_sym = SYMBOL_ALIAS.get(symbol, symbol)
+                    clean = resolved_sym.replace(".NS", "").strip().upper()
                     instrument = f"NSE_EQ|{clean}"
                 else:
-                    # Real token: resolve exact Upstox instrument key from master CSV
                     instrument = client.get_equity_instrument_token(symbol)
                     if not instrument:
-                        st.error(f"❌ Cannot find Upstox Master Contract for {symbol}. Is the ticker name exactly right?")
+                        skipped_symbols.append(f"{symbol} (not found)")
                         continue
-                
+
             resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
-            
-            # In MOCK/yfinance mode we skip the retry loop — yfinance already handles
-            # date ranges internally and retrying just wastes time.
+
+            # Real Upstox API: retry up to 5 times shifting dates back 1 day
             if access_token != "MOCK_TOKEN_FOR_TESTING":
-                # Real Upstox API: retry up to 5 times shifting dates back 1 day
                 max_retries = 5
                 attempt = 0
                 while attempt < max_retries and (resp.get("status") != "success" or not resp.get("data", {}).get("candles")):
@@ -143,9 +184,9 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                     sym_end_str   = end_time_dt.strftime("%Y-%m-%d")
                     sym_start_str = start_time_dt.strftime("%Y-%m-%d")
                     resp = client.get_historical_candle(instrument, upstox_tf, sym_end_str, sym_start_str)
-            
+
             if resp.get("status") != "success" or not resp["data"]["candles"]:
-                st.error(f"❌ No data for {symbol}. Check your Upstox Login status or try a different date range.")
+                skipped_symbols.append(symbol)   # silent skip — show in summary
                 continue
                 
             # Upstox returns newest first. Reverse to oldest first.
@@ -195,8 +236,8 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             if "minute" in upstox_tf:
                 df = df[(df.index.time >= pd.to_datetime('09:15').time()) & (df.index.time <= pd.to_datetime('15:30').time())]
             
-            if df.empty: 
-                st.warning(f"⚠️ No market data found for {symbol} within the selected timeframe ({start_time.date()} to {end_time.date()}).")
+            if df.empty:
+                skipped_symbols.append(f"{symbol} (no candles in window)")
                 continue
             
             # Vectorized Signal Generation (100x Faster than looping)
@@ -380,9 +421,14 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
                         in_position = False
                         
         except Exception as e:
-            st.error(f"Error backtesting {symbol}: {e}")
+            skipped_symbols.append(f"{symbol} (error: {str(e)[:40]})")
             continue
             
+    # Show skipped symbols as a single collapsible summary (not 100 individual errors)
+    if skipped_symbols:
+        with st.expander(f"⚠️ {len(skipped_symbols)} symbol(s) skipped out of {scanned_count} scanned — click to see"):
+            st.write(", ".join(skipped_symbols))
+
     return pd.DataFrame(all_trades)
 import os
 
