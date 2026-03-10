@@ -71,8 +71,19 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
     start_str = (start_time - timedelta(days=30)).strftime("%Y-%m-%d")
     end_str = (end_time + timedelta(days=1)).strftime("%Y-%m-%d")
     
-    # Map timeframe
-    upstox_tf = "1minute" if timeframe == "1m" else "5minute" if timeframe == "5m" else "15minute" if timeframe == "15m" else "30minute" if timeframe == "30m" else "day"
+    # Map timeframe to Upstox supported natively
+    if timeframe in ["1m", "5m", "15m"]:
+        upstox_tf = "1minute"
+    elif timeframe in ["30m", "1h"]:
+        upstox_tf = "30minute"
+    elif timeframe in ["1d"]:
+        upstox_tf = "day"
+    elif timeframe in ["1wk"]:
+        upstox_tf = "week"
+    elif timeframe in ["1mo"]:
+        upstox_tf = "month"
+    else:
+        upstox_tf = "day"
     
     # Initialize Upstox Client (using Paper client for simulation since it falls back to yfinance when no active token, but can hit real api if logged in)
     api_key = st.session_state.get("api_key", "")
@@ -118,6 +129,14 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             # Convert cols to float
             for col in ['Open', 'High', 'Low', 'Close']:
                 df[col] = df[col].astype(float)
+            
+            # 1b. RESAMPLE IF NEEDED (since Upstox only gives 1m, 30m, day strictly)
+            if timeframe in ["5m", "15m"]:
+                rule = "5T" if timeframe == "5m" else "15T"
+                df = df.resample(rule).agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum', 'OI': 'last'}).dropna()
+            elif timeframe == "1h":
+                df = df.resample('1H').agg({'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum', 'OI': 'last'}).dropna()
+                
             
             # 2. RUN INDICATORS ON SPOT DATA
             if ma_type == "EMA":
