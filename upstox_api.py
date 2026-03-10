@@ -412,3 +412,28 @@ class PaperUpstoxClient(UpstoxClient):
                 o["status"] = "cancelled"
                 return o
         raise ValueError("Order not found")
+
+    @classmethod
+    def get_equity_instrument_token(cls, symbol: str) -> Optional[str]:
+        """
+        Resolves a plain text equity symbol (e.g. 'RELIANCE') to its Upstox Instrument Key (e.g. 'NSE_EQ|INE002A01018').
+        Required because Upstox Historical API strictly rejects historical queries on plain trading symbols.
+        """
+        import pandas as pd
+        
+        # Clean symbol (remove .NS if present)
+        clean_symbol = symbol.replace('.NS', '').strip().upper()
+        
+        try:
+            csv_url = "https://assets.upstox.com/market-quote/instruments/exchange/NSE.csv.gz"
+            master_df = pd.read_csv(csv_url, compression='gzip')
+            
+            # Filter for Equities matching the tradingsymbol
+            eq_df = master_df[(master_df['instrument_type'] == 'EQ') & (master_df['tradingsymbol'] == clean_symbol)]
+            if not eq_df.empty:
+                return eq_df.iloc[0]['instrument_key']
+            else:
+                return None
+        except Exception as e:
+            print(f"Failed to fetch Upstox Master Instruments for Equities: {e}")
+            return None

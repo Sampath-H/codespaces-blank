@@ -104,7 +104,10 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             elif symbol == "SENSEX":
                 instrument = "BSE_INDEX|SENSEX"
             else:
-                instrument = symbol if "|" in symbol else f"NSE_EQ|{symbol.replace('.NS', '')}"
+                instrument = client.get_equity_instrument_token(symbol)
+                if not instrument:
+                    st.error(f"❌ Cannot find Upstox Master Contract for {symbol}. Is the ticker name exactly right?")
+                    continue
                 
             resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
             
