@@ -109,6 +109,7 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             resp = client.get_historical_candle(instrument, upstox_tf, end_str, start_str)
             
             if resp.get('status') != 'success' or not resp['data']['candles']:
+                st.error(f"❌ Upstox API Error for {symbol}: {resp.get('message', 'No data returned. Check your Upstox Login status.')}")
                 continue
                 
             # Upstox returns oldest last. Reverse it so chronological.
@@ -150,7 +151,9 @@ def run_backtest(symbols, strategy, fast_ma, slow_ma, ma_type, target_pct, sl_pc
             
             # Filter strictly to simulation window
             df = df[df.index.date >= start_time.date()]
-            if df.empty: continue
+            if df.empty: 
+                st.warning(f"⚠️ No market data found for {symbol} within the selected timeframe ({start_time.date()} to {end_time.date()}).")
+                continue
             
             in_position = False
             trade_side = ""
