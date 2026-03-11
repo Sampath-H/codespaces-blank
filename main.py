@@ -910,34 +910,7 @@ def main():
             label_visibility="collapsed"
         )
 
-        # Push account info + logout to the bottom using flex spacer
-        st.markdown("""
-        <div style="margin-top:2rem;"></div>
-        <hr style="border:none;border-top:1px solid #2d2d44;margin:0.5rem 0;">
-        """, unsafe_allow_html=True)
 
-        # User Info
-        if "profile" in st.session_state:
-            profile = st.session_state["profile"]
-            uname = profile.get("user_name", "User")
-            email = profile.get("email", "demo@example.com")
-            st.markdown(f"""
-            <div style="padding:0.6rem 0.2rem;display:flex;align-items:center;gap:0.6rem;">
-              <div style="background:#f59e0b;border-radius:50%;width:34px;height:34px;
-                   display:flex;align-items:center;justify-content:center;
-                   font-weight:700;font-size:1rem;color:#111;flex-shrink:0;">
-                {uname[0].upper()}
-              </div>
-              <div>
-                <div style="font-weight:600;font-size:0.88rem;color:#e0e0e0;">{uname}</div>
-                <div style="font-size:0.72rem;color:#8899bb;">{email}</div>
-              </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        if st.button("🚪  Logout", use_container_width=True, key="sidebar_logout"):
-            st.session_state.clear()
-            safe_rerun()
 
     # Header
     st.markdown("""
@@ -962,6 +935,34 @@ def main():
         display_reports_page()
     elif "Settings" in page:
         display_settings_page()
+
+    # ── Account info + Logout rendered LAST so it always appears at bottom of sidebar ──
+    with st.sidebar:
+        st.markdown("""
+        <hr style="border:none;border-top:1px solid #2d2d44;margin:1rem 0 0.6rem;">
+        """, unsafe_allow_html=True)
+
+        if "profile" in st.session_state:
+            profile = st.session_state["profile"]
+            uname = profile.get("user_name", "User")
+            email = profile.get("email", "demo@example.com")
+            st.markdown(f"""
+            <div style="padding:0.4rem 0.2rem 0.6rem;display:flex;align-items:center;gap:0.7rem;">
+              <div style="background:#f59e0b;border-radius:50%;width:36px;height:36px;
+                   display:flex;align-items:center;justify-content:center;
+                   font-weight:800;font-size:1.05rem;color:#111;flex-shrink:0;">
+                {uname[0].upper()}
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:0.88rem;color:#e0e0e0;line-height:1.3;">{uname}</div>
+                <div style="font-size:0.7rem;color:#8899bb;">{email}</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        if st.button("🚪  Logout", use_container_width=True, key="sidebar_logout"):
+            st.session_state.clear()
+            safe_rerun()
 
 
 def display_dashboard():
