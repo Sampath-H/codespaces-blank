@@ -812,26 +812,19 @@ def main():
         box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
     }
 
-    /* ─── Hide "keyboard_double_arrow_left" icon text ────────────── */
-    /* Streamlit uses material-icons font; text shows if font fails to load */
-    [data-testid="collapsedControl"],
-    [data-testid="expandedControl"],
-    button[title="Close sidebar"],
-    button[title="Open sidebar"] {
+    /* ─── Hide keyboard_double_arrow_left raw text ───────────────── */
+    /* Sidebar toggle spans holding the material icon text */
+    [data-testid="collapsedControl"] span:not([data-testid]),
+    [data-testid="expandedControl"] span:not([data-testid]) {
+        display: none !important;
+    }
+    button[kind="header"] {
         font-size: 0 !important;
-        overflow: hidden !important;
+        color: transparent !important;
     }
-    [data-testid="collapsedControl"] *,
-    [data-testid="expandedControl"] * {
-        font-size: 0 !important;
-    }
-    /* Restore the icon itself (SVG/icon content) */
-    [data-testid="collapsedControl"] svg,
-    [data-testid="expandedControl"] svg {
-        font-size: initial !important;
-        display: block !important;
-    }
-    /* Hide Navigation radio label */
+    button[kind="header"] svg { font-size: initial !important; color: white !important; }
+
+    /* Hide Navigation label above radio */
     section[data-testid="stSidebar"] .stRadio > label,
     section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
         display: none !important;

@@ -546,7 +546,6 @@ def display_scanner_page():
                 "Current Signals",
                 "Current Signals with Cluster Analysis",
                 "Daily Breakout Tracking",
-                "Both",
                 "Monthly Marubozu Open Scan",
             ],
             label_visibility="collapsed",
@@ -652,7 +651,7 @@ def display_scanner_page():
 
         # ===== Current Signals scan (save to session_state) =====
         if analysis_type in ["Current Signals", "Current Signals with Cluster Analysis"]:
-            method = "cluster" if analysis_type in ["Current Signals with Cluster Analysis", "Both"] else "basic"
+            method = "cluster" if analysis_type == "Current Signals with Cluster Analysis" else "basic"
             progress_bar = st.progress(0, text="Scanning...")
             results = fetch_data(symbols, progress_bar, method)
             progress_bar.empty()
@@ -778,16 +777,23 @@ def display_scanner_page():
                 ]
 
                 css = "<style>"
-                # Base button style for all tile buttons
+                # Base button style for ALL tile rows (3-col and 4-col)
                 css += (
                     "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
                     " div[data-testid='stColumn'] button{"
-                    "border-radius:16px!important;min-height:115px!important;"
+                    "border-radius:16px!important;"
+                    "height:115px!important;min-height:115px!important;max-height:115px!important;"
                     "width:100%!important;font-weight:900!important;"
-                    "font-size:2.5rem!important;line-height:1.1!important;"
-                    "white-space:pre-line!important;padding:1rem 0.4rem!important;"
+                    "font-size:2.5rem!important;line-height:1.15!important;"
+                    "white-space:pre-line!important;"
+                    "padding:0.8rem 0.3rem!important;"
                     "letter-spacing:-0.03em!important;"
+                    "display:flex!important;flex-direction:column!important;"
+                    "align-items:center!important;justify-content:center!important;"
                     "transition:transform 0.15s,box-shadow 0.15s!important;}"
+                    "div[data-testid='stHorizontalBlock']:has(.tile-row-1)"
+                    " div[data-testid='stColumn'] button{"
+                    "font-size:2rem!important;}"
                     "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
                     " div[data-testid='stColumn'] button:hover{"
                     "transform:translateY(-4px)!important;}"
