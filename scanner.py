@@ -582,293 +582,235 @@ def display_scanner_page():
     )
 
     # ---- Run analysis button ----
-    if st.sidebar.button("🚀 Run Analysis", type="primary"):
+    # Only scan when the button is pressed — save results to session_state
+    if st.sidebar.button("\U0001f680 Run Analysis", type="primary"):
         if not symbols:
             st.error("No symbols to analyze")
             return
 
+        # Reset filter on fresh scan
+        st.session_state['scanner_filter'] = 'All'
+        st.session_state.pop('scanner_df', None)
+
         # ===== Monthly Marubozu Open Scan =====
         if analysis_type == "Monthly Marubozu Open Scan":
-            st.subheader("📊 Monthly Marubozu Open Scan")
-            tab1, tab2 = st.tabs([
-                "🟢 Bullish Setup (Green Candle)",
-                "🔴 Bearish Setup (Red Candle)",
-            ])
-
+            st.subheader("\U0001f4ca Monthly Marubozu Open Scan")
+            tab1, tab2 = st.tabs(["\U0001f7e2 Bullish Setup (Green Candle)", "\U0001f534 Bearish Setup (Red Candle)"])
             with tab1:
-                st.markdown(
-                    "**Bullish Setup**: Stocks where previous month was a Green "
-                    "Marubozu and current price is retracing to previous month's "
-                    "open level"
-                )
                 progress_bar = st.progress(0, text="Scanning monthly green candle open...")
                 df_green = scan_monthly_green_open(symbols)
                 progress_bar.empty()
                 if not df_green.empty:
                     st.dataframe(df_green, use_container_width=True)
-                    filename = f"monthly_green_open_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                    st.markdown(create_download_link(df_green, filename), unsafe_allow_html=True)
+                    st.markdown(create_download_link(df_green, f"monthly_green_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"), unsafe_allow_html=True)
                 else:
                     st.warning("No stocks found retracing to green candle open.")
-
             with tab2:
-                st.markdown(
-                    "**Bearish Setup**: Stocks where previous month was a Red "
-                    "Marubozu and current price is rallying to previous month's "
-                    "open level"
-                )
                 progress_bar = st.progress(0, text="Scanning monthly red candle open...")
                 df_red = scan_monthly_red_open(symbols)
                 progress_bar.empty()
                 if not df_red.empty:
                     st.dataframe(df_red, use_container_width=True)
-                    filename = f"monthly_red_open_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                    st.markdown(create_download_link(df_red, filename), unsafe_allow_html=True)
+                    st.markdown(create_download_link(df_red, f"monthly_red_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"), unsafe_allow_html=True)
                 else:
                     st.warning("No stocks found rallying to red candle open.")
             return
 
-        # ===== Current Signals (basic or cluster) =====
-        if analysis_type in [
-            "Current Signals",
-            "Current Signals with Cluster Analysis",
-            "Both",
-        ]:
-            if analysis_method == "cluster":
-                st.subheader("📊 Current Trading Signals with Friday Cluster Analysis")
-                st.info(
-                    "🔍 Detects when stocks return to Friday's first-hour "
-                    "trading cluster after initial breakouts/breakdowns."
-                )
-                with st.expander("📋 Signal Meanings"):
-                    st.markdown("""
-**Signal Types:**
-- **Bullish Confirmed**: Price above Friday's high and staying strong
-- **Bearish Confirmed**: Price below Friday's low and staying weak
-- **Breakout Done but Returns Friday's Cluster**: Broke above Friday's high but returned to cluster
-- **Breakdown Done but Returns Friday's Cluster**: Broke below Friday's low but returned to cluster
-- **Post-Movement Consolidation**: Had significant movement, now consolidating
-- **Neutral**: No significant breakout or breakdown
-
-**Friday's Cluster**: The first-hour trading range around Friday's opening price.
-                    """)
-            else:
-                st.subheader("📊 Current Trading Signals")
-
-            progress_bar = st.progress(0, text="Initializing...")
-            results = fetch_data(symbols, progress_bar, analysis_method)
+        # ===== Current Signals scan (save to session_state) =====
+        if analysis_type in ["Current Signals", "Current Signals with Cluster Analysis", "Both"]:
+            method = "cluster" if analysis_type in ["Current Signals with Cluster Analysis", "Both"] else "basic"
+            progress_bar = st.progress(0, text="Scanning...")
+            results = fetch_data(symbols, progress_bar, method)
             progress_bar.empty()
-
             if results:
-                df = pd.DataFrame(results)
-
-                # Search
-                search_term = st.text_input(
-                    "🔍 Search stocks",
-                    placeholder="Enter stock symbol or name...",
-                )
-                if search_term:
-                    df = df[df['Stock'].str.contains(search_term.upper(), na=False)]
-
-                if not df.empty:
-                    # ── Store results in session state so filter clicks don't re-scan ──
-                    st.session_state['scanner_df']     = df
-                    st.session_state['scanner_method'] = analysis_method
-                    if 'scanner_filter' not in st.session_state:
-                        st.session_state['scanner_filter'] = 'All'
-
-        # ── Read from session state (works after scan AND after filter clicks) ──
-        if 'scanner_df' in st.session_state and analysis_type in [
-            "Current Signals",
-            "Current Signals with Cluster Analysis",
-            "Both",
-        ]:
-            df            = st.session_state['scanner_df']
-            analysis_method = st.session_state.get('scanner_method', 'basic')
-
-            # Search (re-apply on the stored df)
-            search_term = st.text_input(
-                "🔍 Search stocks",
-                placeholder="Enter stock symbol or name...",
-                key="scanner_search"
-            )
-            df_search = df[df['Stock'].str.contains(search_term.upper(), na=False)] if search_term else df
-
-            if not df_search.empty:
-                if 'scanner_filter' not in st.session_state:
-                    st.session_state['scanner_filter'] = 'All'
-
-                # ── Compute counts ───────────────────────────────────────────
-                cnt_total    = len(df_search)
-                cnt_bullish  = len(df_search[df_search['Signal'] == 'Bullish Confirmed'])
-                cnt_bearish  = len(df_search[df_search['Signal'] == 'Bearish Confirmed'])
-
-                if analysis_method == 'cluster':
-                    cnt_cluster   = len(df_search[df_search['Signal'].str.contains("Returns Friday's Cluster", na=False)])
-                    cnt_strong    = len(df_search[df_search['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])])
-                    cnt_breakout  = len(df_search[df_search['Signal'].str.contains('Breakout Done', na=False)])
-                    cnt_breakdown = len(df_search[df_search['Signal'].str.contains('Breakdown Done', na=False)])
-
-                # ── CSS: style ONLY the filter tile buttons by their key ────
-                NUM_COLORS = {
-                    'All':       ('#ffffff', '#1a1a2e'),
-                    'Cluster':   ('#3b82f6', '#0a1628'),
-                    'Strong':    ('#f59e0b', '#1a1200'),
-                    'Bullish':   ('#10b981', '#002d1a'),
-                    'Bearish':   ('#ef4444', '#2d0000'),
-                    'Breakout':  ('#10b981', '#002d1a'),
-                    'Breakdown': ('#ef4444', '#2d0000'),
-                }
-
-                active = st.session_state.get('scanner_filter', 'All')
-
-                def render_tiles(tiles):
-                    """tiles = list of (label, count, key) - renders big clickable filter buttons."""
-                    act = st.session_state.get('scanner_filter', 'All')
-                    NUM_COLORS = {
-                        'All':       ('#ffffff', '#1a1a2e'),
-                        'Cluster':   ('#3b82f6', '#0a1628'),
-                        'Strong':    ('#f59e0b', '#1a1200'),
-                        'Bullish':   ('#10b981', '#002d1a'),
-                        'Bearish':   ('#ef4444', '#2d0000'),
-                        'Breakout':  ('#10b981', '#002d1a'),
-                        'Breakdown': ('#ef4444', '#2d0000'),
-                    }
-                    # Build CSS string using only single quotes and concatenation
-                    css = '<style>'
-                    css += 'div[data-testid=\'column\'] div[data-testid=\'stButton\'] button {'
-                    css += 'border-radius:12px!important;padding:1.1rem 0.5rem!important;'
-                    css += 'width:100%!important;font-weight:900!important;font-size:2rem!important;'
-                    css += 'line-height:1.15!important;min-height:95px!important;'
-                    css += 'transition:all 0.15s ease!important;white-space:pre-line!important;}'
-                    css += 'div[data-testid=\'column\'] div[data-testid=\'stButton\'] button:hover {'
-                    css += 'border-color:#f59e0b!important;transform:translateY(-3px)!important;}'
-                    st.markdown(css + '</style>', unsafe_allow_html=True)
-
-                    cols = st.columns(len(tiles))
-                    for col, (label, count, key) in zip(cols, tiles):
-                        num_col, bg_dark = NUM_COLORS.get(key, ('#fff', '#1a1a2e'))
-                        is_act   = (act == key)
-                        border   = '#f59e0b' if is_act else '#2d2d44'
-                        bg       = '#2d1800' if is_act else bg_dark
-                        marker   = ' ●' if is_act else ''
-                        # Inject per-button colour via a scoped style block
-                        with col:
-                            scoped = (
-                                '<style>div[data-testid=\'column\']:nth-child(' + str(tiles.index((label,count,key))+1) + ')'
-                                + ' div[data-testid=\'stButton\'] button{'
-                                + 'background:' + bg + '!important;'
-                                + 'border:2px solid ' + border + '!important;'
-                                + 'color:' + num_col + '!important;}</style>'
-                            )
-                            st.markdown(scoped, unsafe_allow_html=True)
-                            btn_label = str(count) + '\n' + label.upper() + marker
-                            if st.button(btn_label, key=key,
-                                         use_container_width=True,
-                                         help='Filter: ' + label):
-                                st.session_state['scanner_filter'] = 'All' if is_act else key
-                                st.rerun()
-
-                # ── Render tile rows ──────────────────────────────────────────
-                if analysis_method == 'cluster':
-                    render_tiles([
-                        ('Total Stocks',      cnt_total,     'All'),
-                        ('Cluster Returns',   cnt_cluster,   'Cluster'),
-                        ('Strong Moves',      cnt_strong,    'Strong'),
-                    ])
-                    render_tiles([
-                        ('Bullish',           cnt_bullish,   'Bullish'),
-                        ('Bearish',           cnt_bearish,   'Bearish'),
-                        ('Breakout Returns',  cnt_breakout,  'Breakout'),
-                        ('Breakdown Returns', cnt_breakdown, 'Breakdown'),
-                    ])
-                else:
-                    render_tiles([
-                        ('Total Stocks', cnt_total,   'All'),
-                        ('Bullish',      cnt_bullish, 'Bullish'),
-                        ('Bearish',      cnt_bearish, 'Bearish'),
-                    ])
-
-                st.markdown("---")
-
-                # ── Active filter badge ───────────────────────────────────────
-                if active != 'All':
-                    FILTER_MAP = {
-                        'Bullish':   df_search[df_search['Signal'] == 'Bullish Confirmed'],
-                        'Bearish':   df_search[df_search['Signal'] == 'Bearish Confirmed'],
-                        'Cluster':   df_search[df_search['Signal'].str.contains("Returns Friday's Cluster", na=False)],
-                        'Strong':    df_search[df_search['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])],
-                        'Breakout':  df_search[df_search['Signal'].str.contains('Breakout Done', na=False)],
-                        'Breakdown': df_search[df_search['Signal'].str.contains('Breakdown Done', na=False)],
-                    }
-                    df_filtered = FILTER_MAP.get(active, df_search)
-                    st.markdown(
-                        f"""<div style="background:#1a1200;border:1px solid #f59e0b;
-                        border-radius:8px;padding:0.5rem 1.2rem;display:inline-block;margin-bottom:0.5rem;">
-                        🔍 Showing: <b style='color:#f59e0b;font-size:1.1rem'>{active}</b>
-                        &nbsp;—&nbsp; <b>{len(df_filtered)}</b> stocks
-                        &nbsp;&nbsp;<span style='color:#888;font-size:0.8rem'>
-                        (click same tile to reset)</span></div>""",
-                        unsafe_allow_html=True
-                    )
-                else:
-                    df_filtered = df_search
-
-                # ── Styled table ──────────────────────────────────────────────
-                styled_df = df_filtered.style.map(color_signal, subset=['Signal'])
-                if '%CHNG' in df_filtered.columns:
-                    styled_df = styled_df.map(color_change, subset=['%CHNG', 'CHNG'])
-                st.dataframe(styled_df, use_container_width=True, hide_index=True)
-
-                # Download
-                filename = f"screener_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                st.markdown(create_download_link(df_filtered, filename), unsafe_allow_html=True)
+                st.session_state['scanner_df']     = pd.DataFrame(results)
+                st.session_state['scanner_method'] = method
             else:
-                st.warning("No stocks matched the search.")
-        elif analysis_type in ["Current Signals","Current Signals with Cluster Analysis","Both"]:
-            if 'scanner_df' not in st.session_state:
-                st.info("👈 Click **Run Analysis** in the sidebar to start scanning.")
+                st.warning("No data found for the selected symbols.")
+                return
 
-
-
-        # ===== Daily Breakout Tracking =====
+        # ===== Daily Breakout scan (save to session_state) =====
         if analysis_type in ["Daily Breakout Tracking", "Both"]:
-            st.markdown("---")
-            st.subheader("📈 Daily Breakout Tracking")
-            st.info("📅 Tracks which day the breakout occurred since last Friday")
-
             progress_bar = st.progress(0, text="Tracking daily breakouts...")
             daily_results = fetch_daily_breakout_data(symbols, progress_bar)
             progress_bar.empty()
-
             if daily_results:
-                df_daily = pd.DataFrame(daily_results)
-
-                if not df_daily.empty:
-                    col1, col2, col3, col4 = st.columns(4)
-                    with col1:
-                        st.metric("Total Stocks", len(df_daily))
-                    with col2:
-                        bullish_bo = len(df_daily[df_daily['Breakout Type'] == 'Bullish'])
-                        st.metric("Bullish Breakouts", bullish_bo)
-                    with col3:
-                        bearish_bo = len(df_daily[df_daily['Breakout Type'] == 'Bearish'])
-                        st.metric("Bearish Breakdowns", bearish_bo)
-                    with col4:
-                        no_bo = len(df_daily[df_daily['Breakout Type'] == 'None'])
-                        st.metric("No Breakout", no_bo)
-
-                    styled_daily = df_daily.style.map(
-                        color_signal, subset=['Current Signal']
-                    )
-                    st.dataframe(styled_daily, use_container_width=True)
-
-                    filename = f"daily_breakout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                    st.markdown(
-                        create_download_link(df_daily, filename),
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.warning("No stocks matched the selected signal filters.")
+                st.session_state['scanner_daily_df'] = pd.DataFrame(daily_results)
             else:
-                st.warning("No daily breakout data found.")
+                st.session_state.pop('scanner_daily_df', None)
+
+    # ===========================================================================
+    # DISPLAY SECTION — runs on EVERY rerun (scan OR filter click OR page load)
+    # This is intentionally OUTSIDE the button block so filter clicks work!
+    # ===========================================================================
+
+    # ── Current Signals display ──────────────────────────────────────────────
+    if 'scanner_df' in st.session_state and analysis_type in [
+        "Current Signals", "Current Signals with Cluster Analysis", "Both"
+    ]:
+        df              = st.session_state['scanner_df']
+        analysis_method = st.session_state.get('scanner_method', 'basic')
+
+        if analysis_method == "cluster":
+            with st.expander("\U0001f4cb Signal Meanings"):
+                st.markdown("""
+- **Bullish Confirmed**: Price above Friday high, staying strong
+- **Bearish Confirmed**: Price below Friday low, staying weak
+- **Breakout Done but Returns**: Broke out above Friday high, now back in cluster
+- **Breakdown Done but Returns**: Broke down below Friday low, now back in cluster
+- **Post-Movement Consolidation**: Had big move, now ranging
+- **Neutral**: No breakout/breakdown yet
+                """)
+
+        # Search
+        search_term = st.text_input("\U0001f50d Search stocks", placeholder="Enter stock symbol...", key="scanner_search")
+        df_search   = df[df['Stock'].str.contains(search_term.upper(), na=False)] if search_term else df
+
+        if df_search.empty:
+            st.warning("No stocks matched the search.")
+        else:
+            if 'scanner_filter' not in st.session_state:
+                st.session_state['scanner_filter'] = 'All'
+
+            # ── Counts ──────────────────────────────────────────────────────
+            cnt_total    = len(df_search)
+            cnt_bullish  = len(df_search[df_search['Signal'] == 'Bullish Confirmed'])
+            cnt_bearish  = len(df_search[df_search['Signal'] == 'Bearish Confirmed'])
+            if analysis_method == 'cluster':
+                cnt_cluster   = len(df_search[df_search['Signal'].str.contains("Returns Friday", na=False)])
+                cnt_strong    = len(df_search[df_search['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])])
+                cnt_breakout  = len(df_search[df_search['Signal'].str.contains('Breakout Done', na=False)])
+                cnt_breakdown = len(df_search[df_search['Signal'].str.contains('Breakdown Done', na=False)])
+
+            # ── Colour map ──────────────────────────────────────────────────
+            NUM_COLORS = {
+                'All':       ('#ffffff', '#1a1a2e'),
+                'Cluster':   ('#3b82f6', '#0a1628'),
+                'Strong':    ('#f59e0b', '#1a1200'),
+                'Bullish':   ('#10b981', '#002d1a'),
+                'Bearish':   ('#ef4444', '#2d0000'),
+                'Breakout':  ('#10b981', '#002d1a'),
+                'Breakdown': ('#ef4444', '#2d0000'),
+            }
+
+            # ── Base tile CSS (applied once) ─────────────────────────────
+            st.markdown(
+                "<style>"
+                "div[data-testid=\'stHorizontalBlock\'] div[data-testid=\'stButton\'] button {"
+                "border-radius:14px!important;width:100%!important;"
+                "font-weight:900!important;font-size:1.9rem!important;"
+                "line-height:1.2!important;min-height:90px!important;"
+                "padding:0.9rem 0.4rem!important;white-space:pre-line!important;"
+                "transition:border-color 0.15s,transform 0.15s!important;}"
+                "div[data-testid=\'stHorizontalBlock\'] div[data-testid=\'stButton\'] button:hover {"
+                "transform:translateY(-3px)!important;border-color:#f59e0b!important;"
+                "box-shadow:0 6px 20px rgba(0,0,0,0.5)!important;}"
+                "</style>",
+                unsafe_allow_html=True
+            )
+
+            def render_tiles(tiles):
+                act  = st.session_state.get('scanner_filter', 'All')
+                cols = st.columns(len(tiles))
+                for col, (label, count, key) in zip(cols, tiles):
+                    num_col, bg_dark = NUM_COLORS.get(key, ('#fff', '#1a1a2e'))
+                    is_act  = (act == key)
+                    border  = '#f59e0b' if is_act else '#2d2d44'
+                    bg      = '#2d1800' if is_act else bg_dark
+                    marker  = ' \u25cf' if is_act else ''
+                    # Per-button colour override
+                    with col:
+                        st.markdown(
+                            '<style>div[data-testid=\'stHorizontalBlock\'] '
+                            'div[data-testid=\'stColumn\']:nth-child(' + str(tiles.index((label,count,key))+1) + ') '
+                            'div[data-testid=\'stButton\'] button{'
+                            'background:' + bg + '!important;'
+                            'border:2.5px solid ' + border + '!important;'
+                            'color:' + num_col + '!important;}</style>',
+                            unsafe_allow_html=True
+                        )
+                        btn_lbl = str(count) + '\n' + label.upper() + marker
+                        if st.button(btn_lbl, key='tile_' + key,
+                                     use_container_width=True,
+                                     help='Show: ' + label):
+                            st.session_state['scanner_filter'] = 'All' if is_act else key
+                            st.rerun()
+
+            # ── Render tiles ─────────────────────────────────────────────
+            if analysis_method == 'cluster':
+                render_tiles([
+                    ('Total Stocks',     cnt_total,     'All'),
+                    ('Cluster Returns',  cnt_cluster,   'Cluster'),
+                    ('Strong Moves',     cnt_strong,    'Strong'),
+                ])
+                render_tiles([
+                    ('Bullish',          cnt_bullish,   'Bullish'),
+                    ('Bearish',          cnt_bearish,   'Bearish'),
+                    ('Breakout Returns', cnt_breakout,  'Breakout'),
+                    ('Breakdown Returns',cnt_breakdown,  'Breakdown'),
+                ])
+            else:
+                render_tiles([
+                    ('Total Stocks', cnt_total,   'All'),
+                    ('Bullish',      cnt_bullish, 'Bullish'),
+                    ('Bearish',      cnt_bearish, 'Bearish'),
+                ])
+
+            st.markdown("---")
+
+            # ── Filter map ───────────────────────────────────────────────
+            active = st.session_state.get('scanner_filter', 'All')
+            FILTER_MAP = {
+                'All':       df_search,
+                'Bullish':   df_search[df_search['Signal'] == 'Bullish Confirmed'],
+                'Bearish':   df_search[df_search['Signal'] == 'Bearish Confirmed'],
+                'Cluster':   df_search[df_search['Signal'].str.contains("Returns Friday", na=False)],
+                'Strong':    df_search[df_search['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])],
+                'Breakout':  df_search[df_search['Signal'].str.contains('Breakout Done', na=False)],
+                'Breakdown': df_search[df_search['Signal'].str.contains('Breakdown Done', na=False)],
+            }
+            df_filtered = FILTER_MAP.get(active, df_search)
+
+            # ── Active filter banner + Back button ───────────────────────
+            if active != 'All':
+                bc1, bc2 = st.columns([3, 1])
+                with bc1:
+                    st.markdown(
+                        '<div style="background:#1a1200;border:1px solid #f59e0b;'
+                        'border-radius:8px;padding:0.5rem 1.2rem;margin-bottom:0.5rem;">'
+                        '\U0001f50d Showing: <b style=\'color:#f59e0b;font-size:1.1rem\'>' + active + '</b>'
+                        ' &mdash; <b>' + str(len(df_filtered)) + '</b> stocks</div>',
+                        unsafe_allow_html=True
+                    )
+                with bc2:
+                    if st.button("\u2190 Back to All Results", key="back_btn", use_container_width=True):
+                        st.session_state['scanner_filter'] = 'All'
+                        st.rerun()
+
+            # ── Styled table ─────────────────────────────────────────────
+            styled_df = df_filtered.style.map(color_signal, subset=['Signal'])
+            if '%CHNG' in df_filtered.columns:
+                styled_df = styled_df.map(color_change, subset=['%CHNG', 'CHNG'])
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+            filename = f"screener_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            st.markdown(create_download_link(df_filtered, filename), unsafe_allow_html=True)
+
+    elif analysis_type in ["Current Signals", "Current Signals with Cluster Analysis", "Both"]:
+        st.info("\U0001f448 Click **Run Analysis** in the sidebar to start scanning.")
+
+    # ── Daily Breakout display ───────────────────────────────────────────────
+    if 'scanner_daily_df' in st.session_state and analysis_type in ["Daily Breakout Tracking", "Both"]:
+        st.markdown("---")
+        st.subheader("\U0001f4c8 Daily Breakout Tracking")
+        df_daily = st.session_state['scanner_daily_df']
+        if not df_daily.empty:
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Total Stocks",      len(df_daily))
+            col2.metric("Bullish Breakouts", len(df_daily[df_daily['Breakout Type'] == 'Bullish']))
+            col3.metric("Bearish Breakdowns",len(df_daily[df_daily['Breakout Type'] == 'Bearish']))
+            col4.metric("No Breakout",       len(df_daily[df_daily['Breakout Type'] == 'None']))
+            st.dataframe(df_daily.style.map(color_signal, subset=['Current Signal']), use_container_width=True)
+            st.markdown(create_download_link(df_daily, f"daily_breakout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"), unsafe_allow_html=True)
+        else:
+            st.warning("No daily breakout data found.")
