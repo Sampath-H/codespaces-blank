@@ -662,22 +662,8 @@ def display_scanner_page():
 - **Neutral**: No breakout/breakdown yet
                 """)
 
-        # Header + Search
-        st.markdown("""
-        <div style="background:linear-gradient(135deg,#0a1628 0%,#0f2040 100%);
-             border-radius:14px;padding:1.5rem 1.8rem;margin-bottom:1.2rem;
-             border:1px solid rgba(255,255,255,0.07);
-             box-shadow:0 4px 24px rgba(0,0,0,0.4);">
-          <div style="font-size:1.5rem;font-weight:800;color:#fff;margin-bottom:0.2rem;">
-            📊 Stock Scanner
-          </div>
-          <div style="color:#8899bb;font-size:0.85rem;">
-            Friday cluster analysis &amp; signal detection
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-        search_term = st.text_input("", placeholder="🔍  Search by stock symbol...", key="scanner_search",
-                                    label_visibility="collapsed")
+        # Search
+        search_term = st.text_input("\U0001f50d Search stocks", placeholder="Enter stock symbol...", key="scanner_search")
         df_search   = df[df['Stock'].str.contains(search_term.upper(), na=False)] if search_term else df
 
         if df_search.empty:
@@ -707,69 +693,46 @@ def display_scanner_page():
                 'Breakdown': ('#ef4444', '#2d0000'),
             }
 
-            # ── Tile CSS ─────────────────────────────────────────────────
-            st.markdown("""
-            <style>
-            /* Scanner tile buttons */
-            div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button {
-                border-radius: 16px !important;
-                width: 100% !important;
-                font-weight: 900 !important;
-                font-size: 2.4rem !important;
-                line-height: 1.15 !important;
-                min-height: 105px !important;
-                padding: 1rem 0.5rem !important;
-                white-space: pre-line !important;
-                text-align: center !important;
-                letter-spacing: -0.02em !important;
-                transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s !important;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.35) !important;
-            }
-            div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button:hover {
-                transform: translateY(-4px) !important;
-                border-color: #f59e0b !important;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
-            }
-            div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button:active {
-                transform: translateY(-1px) !important;
-            }
-            /* Back button */
-            button[kind="secondary"] {
-                border-radius: 8px !important;
-            }
-            </style>
-            """, unsafe_allow_html=True)
+            # ── Base tile CSS (applied once) ─────────────────────────────
+            st.markdown(
+                "<style>"
+                "div[data-testid=\'stHorizontalBlock\'] div[data-testid=\'stButton\'] button {"
+                "border-radius:14px!important;width:100%!important;"
+                "font-weight:900!important;font-size:1.9rem!important;"
+                "line-height:1.2!important;min-height:90px!important;"
+                "padding:0.9rem 0.4rem!important;white-space:pre-line!important;"
+                "transition:border-color 0.15s,transform 0.15s!important;}"
+                "div[data-testid=\'stHorizontalBlock\'] div[data-testid=\'stButton\'] button:hover {"
+                "transform:translateY(-3px)!important;border-color:#f59e0b!important;"
+                "box-shadow:0 6px 20px rgba(0,0,0,0.5)!important;}"
+                "</style>",
+                unsafe_allow_html=True
+            )
 
             def render_tiles(tiles):
                 act  = st.session_state.get('scanner_filter', 'All')
                 cols = st.columns(len(tiles))
-                for idx, (col, (label, count, key)) in enumerate(zip(cols, tiles)):
+                for col, (label, count, key) in zip(cols, tiles):
                     num_col, bg_dark = NUM_COLORS.get(key, ('#fff', '#1a1a2e'))
                     is_act  = (act == key)
-                    border  = '#f59e0b' if is_act else 'rgba(255,255,255,0.08)'
+                    border  = '#f59e0b' if is_act else '#2d2d44'
                     bg      = '#2d1800' if is_act else bg_dark
-                    marker  = ' ●' if is_act else ''
-                    shadow_color = num_col + '33'
+                    marker  = ' \u25cf' if is_act else ''
+                    # Per-button colour override
                     with col:
                         st.markdown(
-                            '<style>'
-                            'div[data-testid="stHorizontalBlock"] '
-                            'div[data-testid="stColumn"]:nth-child(' + str(idx+1) + ') '
-                            'div[data-testid="stButton"] > button {'
-                            'background: linear-gradient(145deg,' + bg + ', ' + bg + 'cc) !important;'
-                            'border: 2px solid ' + border + ' !important;'
-                            'color: ' + num_col + ' !important;'
-                            'box-shadow: 0 4px 20px ' + shadow_color + ' !important;'
-                            '}</style>',
+                            '<style>div[data-testid=\'stHorizontalBlock\'] '
+                            'div[data-testid=\'stColumn\']:nth-child(' + str(tiles.index((label,count,key))+1) + ') '
+                            'div[data-testid=\'stButton\'] button{'
+                            'background:' + bg + '!important;'
+                            'border:2.5px solid ' + border + '!important;'
+                            'color:' + num_col + '!important;}</style>',
                             unsafe_allow_html=True
                         )
-                        sub = label.upper()
-                        if is_act:
-                            sub = '▶  ' + sub
-                        btn_lbl = str(count) + '\n' + sub
+                        btn_lbl = str(count) + '\n' + label.upper() + marker
                         if st.button(btn_lbl, key='tile_' + key,
                                      use_container_width=True,
-                                     help='Filter: ' + label):
+                                     help='Show: ' + label):
                             st.session_state['scanner_filter'] = 'All' if is_act else key
                             st.rerun()
 
@@ -780,7 +743,6 @@ def display_scanner_page():
                     ('Cluster Returns',  cnt_cluster,   'Cluster'),
                     ('Strong Moves',     cnt_strong,    'Strong'),
                 ])
-                st.markdown('<div style="margin:0.5rem 0;"></div>', unsafe_allow_html=True)
                 render_tiles([
                     ('Bullish',          cnt_bullish,   'Bullish'),
                     ('Bearish',          cnt_bearish,   'Bearish'),
@@ -811,25 +773,17 @@ def display_scanner_page():
 
             # ── Active filter banner + Back button ───────────────────────
             if active != 'All':
-                num_col_active = NUM_COLORS.get(active, ('#f59e0b', '#1a1a2e'))[0]
-                bc1, bc2 = st.columns([4, 1])
+                bc1, bc2 = st.columns([3, 1])
                 with bc1:
                     st.markdown(
-                        '<div style="background:linear-gradient(135deg,#1a1200,#0d0900);'
-                        'border:1.5px solid #f59e0b;border-radius:12px;'
-                        'padding:0.7rem 1.4rem;margin:0.5rem 0;">'
-                        '<span style="color:#aaa;font-size:0.8rem;letter-spacing:0.1em;'
-                        'text-transform:uppercase;">Filtered View</span><br>'
-                        '<span style="color:' + num_col_active + ';font-size:1.3rem;font-weight:800;">'
-                        + active + '</span>'
-                        '<span style="color:#ccc;font-size:0.95rem;"> &mdash; '
-                        '<b style=\'color:#fff\'>' + str(len(df_filtered)) + '</b> stocks</span>'
-                        '</div>',
+                        '<div style="background:#1a1200;border:1px solid #f59e0b;'
+                        'border-radius:8px;padding:0.5rem 1.2rem;margin-bottom:0.5rem;">'
+                        '\U0001f50d Showing: <b style=\'color:#f59e0b;font-size:1.1rem\'>' + active + '</b>'
+                        ' &mdash; <b>' + str(len(df_filtered)) + '</b> stocks</div>',
                         unsafe_allow_html=True
                     )
                 with bc2:
-                    st.markdown('<div style="margin-top:1.1rem;"></div>', unsafe_allow_html=True)
-                    if st.button("← All Results", key="back_btn", use_container_width=True):
+                    if st.button("\u2190 Back to All Results", key="back_btn", use_container_width=True):
                         st.session_state['scanner_filter'] = 'All'
                         st.rerun()
 
