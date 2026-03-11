@@ -680,15 +680,44 @@ def main():
         font-family: 'DM Sans', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* ─── Completely hide sidebar toggle buttons ─── */
-    /* Old Streamlit (<1.38) test IDs */
-    [data-testid="collapsedControl"] { display: none !important; }
-    [data-testid="stSidebarCollapse"] { display: none !important; }
-    /* New Streamlit (>=1.38) test IDs */
-    [data-testid="stSidebarCollapseButton"] { display: none !important; }
-    button[kind="header"] { display: none !important; }
-    header[data-testid="stHeader"] { display: none !important; }
-    .stAppHeader { display: none !important; }
+    /* ─── Sidebar Toggle Button Font Fix (User requested test) ─── */
+    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded');
+
+    /* Force font to Material Symbols */
+    [data-testid="collapsedControl"] span,
+    [data-testid="collapsedControl"] span span,
+    [data-testid="collapsedControl"] button span,
+    [data-testid="stSidebarCollapse"] span,
+    [data-testid="stSidebarCollapse"] span span,
+    [data-testid="stSidebarCollapseButton"] span,
+    [data-testid="stSidebarCollapseButton"] span span,
+    [data-testid="stSidebarCollapseButton"] button span,
+    header[data-testid="stHeader"] button span,
+    .material-symbols-rounded {
+        font-family: 'Material Symbols Rounded' !important;
+    }
+
+    /* Fallback: constrain button size and hide overflowing text */
+    [data-testid="collapsedControl"],
+    [data-testid="collapsedControl"] button,
+    [data-testid="stSidebarCollapseButton"],
+    [data-testid="stSidebarCollapseButton"] button,
+    header[data-testid="stHeader"] button {
+        font-size: 0 !important;
+        color: transparent !important;
+        overflow: hidden !important;
+        width: 2rem !important;
+        height: 2rem !important;
+    }
+    
+    [data-testid="collapsedControl"] span,
+    [data-testid="collapsedControl"] button span,
+    [data-testid="stSidebarCollapseButton"] span,
+    [data-testid="stSidebarCollapseButton"] button span,
+    header[data-testid="stHeader"] button span {
+        font-size: 1.5rem !important;
+        color: white !important;
+    }
 
     /* ─── App background ─────────────────────────── */
     .stApp { background: #070d1a !important; }
