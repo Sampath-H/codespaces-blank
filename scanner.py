@@ -742,19 +742,15 @@ def display_scanner_page():
                 'Breakdown': cnt_breakdown if analysis_method == 'cluster' else 0,
             }
 
-            # CSS: position:absolute removes button from normal flow -> no empty box below tile
+            # ── CSS: hide the button div entirely, JS onclick on tile triggers it ──
             st.markdown(
                 "<style>"
-                "div[data-testid='stVerticalBlock']:has([data-stile]){"
-                "position:relative!important;}"
+                # Collapse the stButton wrapper + button inside tile columns
                 "div[data-testid='stVerticalBlock']:has([data-stile])"
-                " div[data-testid='stButton']>button{"
-                "position:absolute!important;"
-                "top:0!important;left:0!important;"
-                "width:100%!important;height:110px!important;"
-                "opacity:0!important;cursor:pointer!important;"
-                "z-index:100!important;"
-                "border:none!important;background:transparent!important;}"
+                " div[data-testid='stButton']{height:0!important;min-height:0!important;"
+                "overflow:hidden!important;margin:0!important;padding:0!important;}"
+                "div[data-testid='stVerticalBlock']:has([data-stile])"
+                " div[data-testid='stButton'] button{display:none!important;}"
                 "</style>",
                 unsafe_allow_html=True
             )
@@ -766,32 +762,37 @@ def display_scanner_page():
                     is_act = (active == key)
                     num    = cfg['num']
                     bg     = '#1e0d00' if is_act else cfg['bg']
-                    border = cfg['ba']  if is_act else 'rgba(255,255,255,0.07)'
-                    glow   = num + '40' if is_act else num + '14'
+                    border = cfg['ba']  if is_act else 'rgba(255,255,255,0.08)'
+                    glow   = num + '50' if is_act else num + '18'
                     arrow  = '\u25b6 '  if is_act else ''
                     cnt_v  = str(TILE_COUNTS[key])
                     lbl    = cfg['label'].upper()
+                    # JS: traverse up to stVerticalBlock, find the button, click it
+                    js = ("var vb=this.closest('[data-testid=\"stVerticalBlock\"]');"
+                          "if(vb){var b=vb.querySelector('button');if(b)b.click();}")
                     visual = (
-                        '<div data-stile="' + key + '" style="'
+                        '<div data-stile="' + key + '" onclick="' + js + '" style="'
                         'background:' + bg + ';border:2px solid ' + border + ';'
-                        'border-radius:16px;height:110px;'
-                        'padding:1.25rem 0.5rem 0;text-align:center;'
+                        'border-radius:16px;height:115px;'
+                        'padding:1.3rem 0.5rem 0;text-align:center;'
                         'box-shadow:0 4px 28px ' + glow + ';'
                         'position:relative;overflow:hidden;cursor:pointer;">'
                         '<div style="position:absolute;top:-32px;left:50%;transform:translateX(-50%);'
                         'width:80%;height:64px;pointer-events:none;'
                         'background:radial-gradient(ellipse,' + num + '1a 0%,transparent 70%);"></div>'
-                        '<div style="font-size:2.55rem;font-weight:900;color:' + num + ';'
-                        'line-height:1;letter-spacing:-0.04em;">' + cnt_v + '</div>'
-                        '<div style="font-size:0.6rem;color:rgba(255,255,255,0.38);'
-                        'text-transform:uppercase;letter-spacing:0.14em;margin-top:0.35rem;font-weight:700;">'
-                        + arrow + lbl + '</div></div>'
+                        '<div style="font-size:2.6rem;font-weight:900;color:' + num + ';'
+                        'line-height:1;letter-spacing:-0.04em;'
+                        'font-family:Consolas,monospace;">' + cnt_v + '</div>'
+                        '<div style="font-size:0.62rem;color:rgba(255,255,255,0.4);'
+                        'text-transform:uppercase;letter-spacing:0.13em;'
+                        'margin-top:0.38rem;font-weight:700;">' + arrow + lbl + '</div>'
+                        '</div>'
                     )
                     with col:
                         st.markdown(visual, unsafe_allow_html=True)
+                        # Hidden button (zero height via CSS above) - clicked by JS onclick
                         if st.button('\u200b', key='tile_' + key,
-                                     use_container_width=True,
-                                     help='Filter: ' + cfg['label']):
+                                     use_container_width=True):
                             st.session_state['scanner_filter'] = 'All' if is_act else key
                             st.rerun()
 
