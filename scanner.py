@@ -742,54 +742,95 @@ def display_scanner_page():
                 'Breakdown': cnt_breakdown if analysis_method == 'cluster' else 0,
             }
 
-            # ── Tile row: unique ID span → CSS sibling selector styles matching button ──
-            # Inject one big CSS block that styles each tile button by its unique span sibling
-            TILE_BTN_CSS = "<style>"
-            for _key, _cfg in TILE_CFG.items():
-                _is_act = (active == _key)
-                _num    = _cfg['num']
-                _bg     = '#1e0d00' if _is_act else _cfg['bg']
-                _border = _cfg['ba'] if _is_act else 'rgba(255,255,255,0.09)'
-                _glow   = _num + '50' if _is_act else _num + '18'
-                TILE_BTN_CSS += (
-                    "div:has(#tid-" + _key + ") + div button,"
-                    "div:has(#tid-" + _key + ") + div + div button{"
-                    "background:" + _bg + "!important;"
-                    "border:2px solid " + _border + "!important;"
-                    "color:" + _num + "!important;"
-                    "box-shadow:0 4px 28px " + _glow + "!important;"
-                    "border-radius:16px!important;"
-                    "width:100%!important;"
-                    "min-height:115px!important;"
-                    "font-size:2.55rem!important;"
-                    "font-weight:900!important;"
-                    "line-height:1.1!important;"
-                    "white-space:pre-line!important;"
-                    "padding:1.1rem 0.4rem!important;"
-                    "transition:transform 0.15s,box-shadow 0.15s!important;"
-                    "letter-spacing:-0.03em!important;}"
-                    "div:has(#tid-" + _key + ") + div button:hover,"
-                    "div:has(#tid-" + _key + ") + div + div button:hover{"
-                    "transform:translateY(-4px)!important;"
-                    "box-shadow:0 14px 36px " + _glow + "!important;}"
-                )
-            TILE_BTN_CSS += "</style>"
-            st.markdown(TILE_BTN_CSS, unsafe_allow_html=True)
+            # ─── Tile grid: st.button with nth-child CSS scoped to anchor divs ───
+            # Strategy: inject markdown anchor BEFORE st.columns; use
+            #   div:has(#anchor) ~ [stHorizontalBlock] [stColumn]:nth-child(N) button
+            # to scope color CSS to only our tile rows.
 
-            def render_tile_row(keys):
+            def tile_css(act, tile_cfg, tile_counts):
+                rows_cfg = [
+                    [('All','#e2e8f0','#0f172a','#f59e0b'),
+                     ('Cluster','#38bdf8','#071828','#38bdf8'),
+                     ('Strong','#fbbf24','#130d00','#fbbf24')],
+                    [('Bullish','#34d399','#021a0e','#34d399'),
+                     ('Bearish','#f87171','#1a0404','#f87171'),
+                     ('Breakout','#34d399','#021a0e','#34d399'),
+                     ('Breakdown','#f87171','#1a0404','#f87171')],
+                ]
+                basic_cfg = [
+                    [('All','#e2e8f0','#0f172a','#f59e0b'),
+                     ('Bullish','#34d399','#021a0e','#34d399'),
+                     ('Bearish','#f87171','#1a0404','#f87171')],
+                ]
+
+                css = "<style>"
+                # Base button style for all tile buttons
+                css += (
+                    "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
+                    " div[data-testid='stColumn'] button{"
+                    "border-radius:16px!important;min-height:115px!important;"
+                    "width:100%!important;font-weight:900!important;"
+                    "font-size:2.5rem!important;line-height:1.1!important;"
+                    "white-space:pre-line!important;padding:1rem 0.4rem!important;"
+                    "letter-spacing:-0.03em!important;"
+                    "transition:transform 0.15s,box-shadow 0.15s!important;}"
+                    "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
+                    " div[data-testid='stColumn'] button:hover{"
+                    "transform:translateY(-4px)!important;}"
+                )
+
+                for row_idx, row in enumerate(rows_cfg):
+                    for col_idx, (key, num, bg, ba) in enumerate(row):
+                        is_act = (act == key)
+                        _bg    = '#1e0d00' if is_act else bg
+                        _bd    = ba if is_act else 'rgba(255,255,255,0.08)'
+                        _glow  = num + '55' if is_act else num + '18'
+                        css += (
+                            # anchor id = tile-r0 or tile-r1, scoped by row
+                            "div[data-testid='stHorizontalBlock']:has(.tile-row-" + str(row_idx) + ")"
+                            " div[data-testid='stColumn']:nth-child(" + str(col_idx+1) + ") button{"
+                            "background:" + _bg + "!important;"
+                            "border:2px solid " + _bd + "!important;"
+                            "color:" + num + "!important;"
+                            "box-shadow:0 4px 24px " + _glow + "!important;}"
+                        )
+                # basic mode (1 row only, 3 tiles)
+                for col_idx, (key, num, bg, ba) in enumerate(basic_cfg[0]):
+                    is_act = (act == key)
+                    _bg    = '#1e0d00' if is_act else bg
+                    _bd    = ba if is_act else 'rgba(255,255,255,0.08)'
+                    _glow  = num + '55' if is_act else num + '18'
+                    css += (
+                        "div[data-testid='stHorizontalBlock']:has(.tile-row-basic)"
+                        " div[data-testid='stColumn']:nth-child(" + str(col_idx+1) + ") button{"
+                        "background:" + _bg + "!important;"
+                        "border:2px solid " + _bd + "!important;"
+                        "color:" + num + "!important;"
+                        "box-shadow:0 4px 24px " + _glow + "!important;}"
+                    )
+                css += "</style>"
+                return css
+
+            st.markdown(tile_css(active, TILE_CFG, TILE_COUNTS), unsafe_allow_html=True)
+
+            def render_tile_row(keys, row_class):
+                # Inject class marker inside the row so :has() can scope the CSS
+                # We put it as the FIRST element inside the first column
                 cols = st.columns(len(keys))
-                for col, key in zip(cols, keys):
+                for i, (col, key) in enumerate(zip(cols, keys)):
                     cfg    = TILE_CFG[key]
                     is_act = (active == key)
-                    num    = cfg['num']
-                    arrow  = '\u25b6  ' if is_act else ''
                     cnt_v  = str(TILE_COUNTS[key])
                     lbl    = cfg['label']
-                    # Span with unique ID acts as CSS anchor for the sibling button
+                    arrow  = '\u25b6  ' if is_act else ''
                     btn_lbl = cnt_v + '\n' + arrow + lbl.upper()
                     with col:
-                        st.markdown('<span id="tid-' + key + '"></span>',
-                                    unsafe_allow_html=True)
+                        if i == 0:
+                            # Marker span in first col — CSS :has(.tile-row-N) scopes the whole row
+                            st.markdown(
+                                '<span class="' + row_class + '" style="display:none;"></span>',
+                                unsafe_allow_html=True
+                            )
                         if st.button(btn_lbl, key='tile_' + key,
                                      use_container_width=True,
                                      help='Filter: ' + lbl):
@@ -797,11 +838,11 @@ def display_scanner_page():
                             st.rerun()
 
             if analysis_method == 'cluster':
-                render_tile_row(['All', 'Cluster', 'Strong'])
-                st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
-                render_tile_row(['Bullish', 'Bearish', 'Breakout', 'Breakdown'])
+                render_tile_row(['All', 'Cluster', 'Strong'], 'tile-row-0')
+                st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
+                render_tile_row(['Bullish', 'Bearish', 'Breakout', 'Breakdown'], 'tile-row-1')
             else:
-                render_tile_row(['All', 'Bullish', 'Bearish'])
+                render_tile_row(['All', 'Bullish', 'Bearish'], 'tile-row-basic')
 
             st.markdown(
                 '<div style="margin:0.8rem 0 0.4rem;'
