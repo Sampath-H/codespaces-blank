@@ -742,14 +742,18 @@ def display_scanner_page():
                 'Breakdown': cnt_breakdown if analysis_method == 'cluster' else 0,
             }
 
-            # CSS: makes the transparent button overlay sit ON TOP of the visual tile
+            # CSS: position:absolute removes button from normal flow -> no empty box below tile
             st.markdown(
                 "<style>"
-                "div[data-testid='stMarkdownContainer']:has([data-stile])"
-                " ~ div[data-testid='stButton'] > button {"
-                "opacity:0!important;position:relative!important;z-index:20!important;"
-                "margin-top:-110px!important;height:110px!important;"
-                "width:100%!important;cursor:pointer!important;"
+                "div[data-testid='stVerticalBlock']:has([data-stile]){"
+                "position:relative!important;}"
+                "div[data-testid='stVerticalBlock']:has([data-stile])"
+                " div[data-testid='stButton']>button{"
+                "position:absolute!important;"
+                "top:0!important;left:0!important;"
+                "width:100%!important;height:110px!important;"
+                "opacity:0!important;cursor:pointer!important;"
+                "z-index:100!important;"
                 "border:none!important;background:transparent!important;}"
                 "</style>",
                 unsafe_allow_html=True
