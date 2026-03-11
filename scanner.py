@@ -671,160 +671,165 @@ def display_scanner_page():
                     df = df[df['Stock'].str.contains(search_term.upper(), na=False)]
 
                 if not df.empty:
-                    # ── Initialise active filter in session state ──────────────
+                    # ── Store results in session state so filter clicks don't re-scan ──
+                    st.session_state['scanner_df']     = df
+                    st.session_state['scanner_method'] = analysis_method
                     if 'scanner_filter' not in st.session_state:
                         st.session_state['scanner_filter'] = 'All'
 
-                    # ── Helper: clickable metric tile ──────────────────────────
-                    # The whole card IS the button — styled with CSS injection
-                    st.markdown("""
-                    <style>
-                    /* Make metric buttons look like big number tiles */
-                    div[data-testid="stButton"] > button[kind="secondary"] {
-                        background: #1a1a2e !important;
-                        border: 1px solid #2d2d44 !important;
-                        border-radius: 10px !important;
-                        padding: 0.8rem 0.5rem !important;
-                        width: 100% !important;
-                        color: white !important;
-                        font-size: 0.75rem !important;
-                        letter-spacing: 0.05em !important;
-                        transition: all 0.2s ease !important;
-                    }
-                    div[data-testid="stButton"] > button[kind="secondary"]:hover {
-                        background: #252540 !important;
-                        border-color: #f59e0b !important;
-                        transform: translateY(-2px) !important;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
+        # ── Read from session state (works after scan AND after filter clicks) ──
+        if 'scanner_df' in st.session_state and analysis_type in [
+            "Current Signals",
+            "Current Signals with Cluster Analysis",
+            "Both",
+        ]:
+            df            = st.session_state['scanner_df']
+            analysis_method = st.session_state.get('scanner_method', 'basic')
 
-                    def metric_btn(label, value, filter_key, col):
-                        """Render a clickable metric tile that filters the table.
-                        
-                        Uses markdown for the big coloured number (since st.button
-                        does NOT render HTML in its label) and a thin button below
-                        for the actual click action.
-                        """
+            # Search (re-apply on the stored df)
+            search_term = st.text_input(
+                "🔍 Search stocks",
+                placeholder="Enter stock symbol or name...",
+                key="scanner_search"
+            )
+            df_search = df[df['Stock'].str.contains(search_term.upper(), na=False)] if search_term else df
+
+            if not df_search.empty:
+                if 'scanner_filter' not in st.session_state:
+                    st.session_state['scanner_filter'] = 'All'
+
+                # ── Compute counts ───────────────────────────────────────────
+                cnt_total    = len(df_search)
+                cnt_bullish  = len(df_search[df_search['Signal'] == 'Bullish Confirmed'])
+                cnt_bearish  = len(df_search[df_search['Signal'] == 'Bearish Confirmed'])
+
+                if analysis_method == 'cluster':
+                    cnt_cluster   = len(df_search[df_search['Signal'].str.contains("Returns Friday's Cluster", na=False)])
+                    cnt_strong    = len(df_search[df_search['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])])
+                    cnt_breakout  = len(df_search[df_search['Signal'].str.contains('Breakout Done', na=False)])
+                    cnt_breakdown = len(df_search[df_search['Signal'].str.contains('Breakdown Done', na=False)])
+
+                # ── CSS: style ONLY the filter tile buttons by their key ────
+                NUM_COLORS = {
+                    'All':       ('#ffffff', '#1a1a2e'),
+                    'Cluster':   ('#3b82f6', '#0a1628'),
+                    'Strong':    ('#f59e0b', '#1a1200'),
+                    'Bullish':   ('#10b981', '#002d1a'),
+                    'Bearish':   ('#ef4444', '#2d0000'),
+                    'Breakout':  ('#10b981', '#002d1a'),
+                    'Breakdown': ('#ef4444', '#2d0000'),
+                }
+
+                active = st.session_state.get('scanner_filter', 'All')
+
+                def render_tiles(tiles):
+                    """tiles = list of (label, count, key) - renders big clickable filter buttons."""
+                    act = st.session_state.get('scanner_filter', 'All')
+                    NUM_COLORS = {
+                        'All':       ('#ffffff', '#1a1a2e'),
+                        'Cluster':   ('#3b82f6', '#0a1628'),
+                        'Strong':    ('#f59e0b', '#1a1200'),
+                        'Bullish':   ('#10b981', '#002d1a'),
+                        'Bearish':   ('#ef4444', '#2d0000'),
+                        'Breakout':  ('#10b981', '#002d1a'),
+                        'Breakdown': ('#ef4444', '#2d0000'),
+                    }
+                    # Build CSS string using only single quotes and concatenation
+                    css = '<style>'
+                    css += 'div[data-testid=\'column\'] div[data-testid=\'stButton\'] button {'
+                    css += 'border-radius:12px!important;padding:1.1rem 0.5rem!important;'
+                    css += 'width:100%!important;font-weight:900!important;font-size:2rem!important;'
+                    css += 'line-height:1.15!important;min-height:95px!important;'
+                    css += 'transition:all 0.15s ease!important;white-space:pre-line!important;}'
+                    css += 'div[data-testid=\'column\'] div[data-testid=\'stButton\'] button:hover {'
+                    css += 'border-color:#f59e0b!important;transform:translateY(-3px)!important;}'
+                    st.markdown(css + '</style>', unsafe_allow_html=True)
+
+                    cols = st.columns(len(tiles))
+                    for col, (label, count, key) in zip(cols, tiles):
+                        num_col, bg_dark = NUM_COLORS.get(key, ('#fff', '#1a1a2e'))
+                        is_act   = (act == key)
+                        border   = '#f59e0b' if is_act else '#2d2d44'
+                        bg       = '#2d1800' if is_act else bg_dark
+                        marker   = ' ●' if is_act else ''
+                        # Inject per-button colour via a scoped style block
                         with col:
-                            is_active = st.session_state["scanner_filter"] == filter_key
-
-                            NUM_COLOR = {
-                                "Bullish":   "#10b981",
-                                "Bearish":   "#ef4444",
-                                "Cluster":   "#3b82f6",
-                                "Strong":    "#f59e0b",
-                                "Breakout":  "#10b981",
-                                "Breakdown": "#ef4444",
-                                "All":       "#ffffff",
-                            }.get(filter_key, "#ffffff")
-
-                            border_color = "#f59e0b" if is_active else "#2d2d44"
-                            bg_color     = "#2d1800"  if is_active else "#1a1a2e"
-                            arrow        = "▶ "       if is_active else ""
-
-                            # Big coloured number via markdown (HTML renders here)
-                            st.markdown(
-                                f"""<div style="background:{bg_color};border:2px solid {border_color};
-                                border-radius:10px;padding:0.75rem 0.5rem 0.3rem;
-                                text-align:center;margin-bottom:2px;">
-                                  <span style="font-size:2.2rem;font-weight:900;
-                                    color:{NUM_COLOR};line-height:1;">{value}</span><br>
-                                  <span style="font-size:0.7rem;color:#aaa;
-                                    text-transform:uppercase;letter-spacing:0.07em;">
-                                    {arrow}{label}</span>
-                                </div>""",
-                                unsafe_allow_html=True
+                            scoped = (
+                                '<style>div[data-testid=\'column\']:nth-child(' + str(tiles.index((label,count,key))+1) + ')'
+                                + ' div[data-testid=\'stButton\'] button{'
+                                + 'background:' + bg + '!important;'
+                                + 'border:2px solid ' + border + '!important;'
+                                + 'color:' + num_col + '!important;}</style>'
                             )
-
-                            # Thin invisible button to capture the click
-                            st.markdown(
-                                """<style>
-                                  .stButton>button{margin-top:-6px;height:28px;
-                                    background:transparent!important;
-                                    border:none!important;color:transparent!important;
-                                    box-shadow:none!important;width:100%;}
-                                  .stButton>button:hover{background:rgba(255,255,255,0.05)
-                                    !important;color:transparent!important;}
-                                </style>""",
-                                unsafe_allow_html=True
-                            )
-                            if st.button(" ", key=f"btn_{filter_key}",
+                            st.markdown(scoped, unsafe_allow_html=True)
+                            btn_label = str(count) + '\n' + label.upper() + marker
+                            if st.button(btn_label, key=key,
                                          use_container_width=True,
-                                         help=f"Click to filter: {label}"):
-                                st.session_state["scanner_filter"] = (
-                                    "All" if is_active else filter_key
-                                )
+                                         help='Filter: ' + label):
+                                st.session_state['scanner_filter'] = 'All' if is_act else key
                                 st.rerun()
 
-                    # ── Compute counts ─────────────────────────────────────────
-                    cnt_total    = len(df)
-                    cnt_bullish  = len(df[df['Signal'] == 'Bullish Confirmed'])
-                    cnt_bearish  = len(df[df['Signal'] == 'Bearish Confirmed'])
-
-                    if analysis_method == 'cluster':
-                        cnt_cluster  = len(df[df['Signal'].str.contains("Returns Friday's Cluster", na=False)])
-                        cnt_strong   = len(df[df['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])])
-                        cnt_breakout = len(df[df['Signal'].str.contains('Breakout Done', na=False)])
-                        cnt_breakdown= len(df[df['Signal'].str.contains('Breakdown Done', na=False)])
-
-                        c1, c2, c3 = st.columns(3)
-                        metric_btn('Total Stocks',      cnt_total,    'All',       c1)
-                        metric_btn('Cluster Returns',   cnt_cluster,  'Cluster',   c2)
-                        metric_btn('Strong Moves',      cnt_strong,   'Strong',    c3)
-
-                        c4, c5, c6, c7 = st.columns(4)
-                        metric_btn('Bullish',           cnt_bullish,  'Bullish',   c4)
-                        metric_btn('Bearish',           cnt_bearish,  'Bearish',   c5)
-                        metric_btn('Breakout Returns',  cnt_breakout, 'Breakout',  c6)
-                        metric_btn('Breakdown Returns', cnt_breakdown,'Breakdown', c7)
-                    else:
-                        c1, c2, c3 = st.columns(3)
-                        metric_btn('Total Stocks', cnt_total,   'All',     c1)
-                        metric_btn('Bullish',      cnt_bullish, 'Bullish', c2)
-                        metric_btn('Bearish',      cnt_bearish, 'Bearish', c3)
-
-                    # ── Apply active filter ────────────────────────────────────
-                    active = st.session_state['scanner_filter']
-                    FILTER_MAP = {
-                        'All':       df,
-                        'Bullish':   df[df['Signal'] == 'Bullish Confirmed'],
-                        'Bearish':   df[df['Signal'] == 'Bearish Confirmed'],
-                        'Cluster':   df[df['Signal'].str.contains("Returns Friday's Cluster", na=False)],
-                        'Strong':    df[df['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])],
-                        'Breakout':  df[df['Signal'].str.contains('Breakout Done', na=False)],
-                        'Breakdown': df[df['Signal'].str.contains('Breakdown Done', na=False)],
-                    }
-                    df_filtered = FILTER_MAP.get(active, df)
-
-                    # Active filter badge
-                    if active != 'All':
-                        st.markdown(
-                            f"""<div style="background:#2d1a00;border:1px solid #f59e0b;
-                            border-radius:6px;padding:0.4rem 1rem;display:inline-block;
-                            margin:0.5rem 0;">
-                            🔍 Showing: <b style='color:#f59e0b'>{active}</b>
-                            — {len(df_filtered)} stocks
-                            &nbsp;&nbsp;
-                            <span style='font-size:0.8rem;color:#aaa;'>
-                            (click the same tile again to show all)</span>
-                            </div>""",
-                            unsafe_allow_html=True
-                        )
-
-                    # ── Styled table ───────────────────────────────────────────
-                    styled_df = df_filtered.style.map(color_signal, subset=['Signal'])
-                    if '%CHNG' in df_filtered.columns:
-                        styled_df = styled_df.map(color_change, subset=['%CHNG', 'CHNG'])
-                    st.dataframe(styled_df, use_container_width=True)
-
-                    # Download
-                    filename = f"screener_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-                    st.markdown(create_download_link(df, filename), unsafe_allow_html=True)
+                # ── Render tile rows ──────────────────────────────────────────
+                if analysis_method == 'cluster':
+                    render_tiles([
+                        ('Total Stocks',      cnt_total,     'All'),
+                        ('Cluster Returns',   cnt_cluster,   'Cluster'),
+                        ('Strong Moves',      cnt_strong,    'Strong'),
+                    ])
+                    render_tiles([
+                        ('Bullish',           cnt_bullish,   'Bullish'),
+                        ('Bearish',           cnt_bearish,   'Bearish'),
+                        ('Breakout Returns',  cnt_breakout,  'Breakout'),
+                        ('Breakdown Returns', cnt_breakdown, 'Breakdown'),
+                    ])
                 else:
-                    st.warning("No stocks matched the selected signal filters.")
+                    render_tiles([
+                        ('Total Stocks', cnt_total,   'All'),
+                        ('Bullish',      cnt_bullish, 'Bullish'),
+                        ('Bearish',      cnt_bearish, 'Bearish'),
+                    ])
+
+                st.markdown("---")
+
+                # ── Active filter badge ───────────────────────────────────────
+                if active != 'All':
+                    FILTER_MAP = {
+                        'Bullish':   df_search[df_search['Signal'] == 'Bullish Confirmed'],
+                        'Bearish':   df_search[df_search['Signal'] == 'Bearish Confirmed'],
+                        'Cluster':   df_search[df_search['Signal'].str.contains("Returns Friday's Cluster", na=False)],
+                        'Strong':    df_search[df_search['Signal'].isin(['Bullish Confirmed','Bearish Confirmed'])],
+                        'Breakout':  df_search[df_search['Signal'].str.contains('Breakout Done', na=False)],
+                        'Breakdown': df_search[df_search['Signal'].str.contains('Breakdown Done', na=False)],
+                    }
+                    df_filtered = FILTER_MAP.get(active, df_search)
+                    st.markdown(
+                        f"""<div style="background:#1a1200;border:1px solid #f59e0b;
+                        border-radius:8px;padding:0.5rem 1.2rem;display:inline-block;margin-bottom:0.5rem;">
+                        🔍 Showing: <b style='color:#f59e0b;font-size:1.1rem'>{active}</b>
+                        &nbsp;—&nbsp; <b>{len(df_filtered)}</b> stocks
+                        &nbsp;&nbsp;<span style='color:#888;font-size:0.8rem'>
+                        (click same tile to reset)</span></div>""",
+                        unsafe_allow_html=True
+                    )
+                else:
+                    df_filtered = df_search
+
+                # ── Styled table ──────────────────────────────────────────────
+                styled_df = df_filtered.style.map(color_signal, subset=['Signal'])
+                if '%CHNG' in df_filtered.columns:
+                    styled_df = styled_df.map(color_change, subset=['%CHNG', 'CHNG'])
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+
+                # Download
+                filename = f"screener_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                st.markdown(create_download_link(df_filtered, filename), unsafe_allow_html=True)
             else:
-                st.warning("No data found for the selected symbols.")
+                st.warning("No stocks matched the search.")
+        elif analysis_type in ["Current Signals","Current Signals with Cluster Analysis","Both"]:
+            if 'scanner_df' not in st.session_state:
+                st.info("👈 Click **Run Analysis** in the sidebar to start scanning.")
+
+
 
         # ===== Daily Breakout Tracking =====
         if analysis_type in ["Daily Breakout Tracking", "Both"]:
