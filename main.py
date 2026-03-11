@@ -889,26 +889,53 @@ def main():
 
     # Sidebar Navigation
     with st.sidebar:
-        st.markdown("### 📊 AlgoTrade")
-        st.markdown("---")
-        
+        # Logo / brand
+        st.markdown("""
+        <div style="padding:1rem 0 0.5rem;text-align:center;">
+          <div style="font-size:1.8rem;font-weight:800;color:#fff;letter-spacing:-0.03em;">
+            📊 AlgoTrade <span style="color:#f59e0b;">Pro</span>
+          </div>
+          <div style="font-size:0.72rem;color:#8899bb;letter-spacing:0.12em;
+               text-transform:uppercase;margin-top:2px;">
+            Algorithmic Trading Platform
+          </div>
+        </div>
+        <hr style="border:none;border-top:1px solid #2d2d44;margin:0.75rem 0;">
+        """, unsafe_allow_html=True)
+
         page = st.radio(
             "Navigation",
-            ["Dashboard", "📊 Scanner", "🤖 Algo Trading", "Strategies", "Backtest", "Reports", "Settings"],
+            ["🏠  Dashboard", "📊  Scanner", "🤖  Algo Trading",
+             "📐  Strategies", "📈  Backtest", "📋  Reports", "⚙️  Settings"],
             label_visibility="collapsed"
         )
-        
-        st.markdown("---")
-        
+
+        # Push account info + logout to the bottom using flex spacer
+        st.markdown("""
+        <div style="margin-top:2rem;"></div>
+        <hr style="border:none;border-top:1px solid #2d2d44;margin:0.5rem 0;">
+        """, unsafe_allow_html=True)
+
         # User Info
-        st.markdown("### 👤 Account")
         if "profile" in st.session_state:
             profile = st.session_state["profile"]
-            st.markdown(f"**{profile.get('user_name', 'User')}**")
-            st.caption(profile.get('email', 'user@example.com'))
-        
-        # Logout
-        if st.button("🚪 Logout", use_container_width=True):
+            uname = profile.get("user_name", "User")
+            email = profile.get("email", "demo@example.com")
+            st.markdown(f"""
+            <div style="padding:0.6rem 0.2rem;display:flex;align-items:center;gap:0.6rem;">
+              <div style="background:#f59e0b;border-radius:50%;width:34px;height:34px;
+                   display:flex;align-items:center;justify-content:center;
+                   font-weight:700;font-size:1rem;color:#111;flex-shrink:0;">
+                {uname[0].upper()}
+              </div>
+              <div>
+                <div style="font-weight:600;font-size:0.88rem;color:#e0e0e0;">{uname}</div>
+                <div style="font-size:0.72rem;color:#8899bb;">{email}</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        if st.button("🚪  Logout", use_container_width=True, key="sidebar_logout"):
             st.session_state.clear()
             safe_rerun()
 
@@ -921,19 +948,19 @@ def main():
     """, unsafe_allow_html=True)
 
     # Page Routing
-    if page == "Dashboard":
+    if "Dashboard" in page:
         display_dashboard()
-    elif page == "📊 Scanner":
+    elif "Scanner" in page:
         display_scanner_page()
-    elif page == "🤖 Algo Trading":
+    elif "Algo Trading" in page:
         display_algo_trading_page()
-    elif page == "Strategies":
+    elif "Strategies" in page:
         display_strategies_page()
-    elif page == "Backtest":
+    elif "Backtest" in page:
         display_backtest_page()
-    elif page == "Reports":
+    elif "Reports" in page:
         display_reports_page()
-    elif page == "Settings":
+    elif "Settings" in page:
         display_settings_page()
 
 
