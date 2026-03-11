@@ -682,18 +682,34 @@ def main():
     .stApp { background: #070d1a !important; }
     section[data-testid="stSidebar"] { background: #0a0f1e !important; border-right: 1px solid rgba(255,255,255,0.06) !important; }
 
-    /* ─── Sidebar nav radio ───────────────────────── */
+    /* ─── Sidebar nav radio — hide circles, style as nav items ───── */
+    /* Hide the default radio circle dot */
+    div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p { display:none !important; }
+    div[data-testid="stRadio"] > div { gap:0 !important; }
+    div[data-testid="stRadio"] label div:first-child {
+        display: none !important;
+    }
     div[data-testid="stRadio"] label {
-        font-size: 0.9rem !important;
-        color: #8899bb !important;
-        padding: 0.45rem 0.7rem !important;
+        font-size: 0.92rem !important;
+        color: #7a8fb5 !important;
+        padding: 0.5rem 0.8rem !important;
         border-radius: 8px !important;
         transition: background 0.15s, color 0.15s !important;
-        display: block !important;
+        display: flex !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 1px 0 !important;
     }
-    div[data-testid="stRadio"] label:hover { background: rgba(255,255,255,0.05) !important; color: #fff !important; }
-    div[data-testid="stRadio"] [aria-checked="true"] + label,
-    div[data-testid="stRadio"] label:has(+ [aria-checked="true"]) { color: #fff !important; }
+    div[data-testid="stRadio"] label:hover {
+        background: rgba(255,255,255,0.06) !important;
+        color: #e0e8ff !important;
+    }
+    div[data-testid="stRadio"] label[data-checked="true"],
+    div[data-testid="stRadio"] label:has(input:checked) {
+        color: #ffffff !important;
+        background: rgba(59,130,246,0.12) !important;
+        font-weight: 600 !important;
+    }
 
     /* ─── Sidebar run button ──────────────────────── */
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button {

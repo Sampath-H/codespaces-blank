@@ -742,18 +742,39 @@ def display_scanner_page():
                 'Breakdown': cnt_breakdown if analysis_method == 'cluster' else 0,
             }
 
-            # ── CSS: hide the button div entirely, JS onclick on tile triggers it ──
-            st.markdown(
-                "<style>"
-                # Collapse the stButton wrapper + button inside tile columns
-                "div[data-testid='stVerticalBlock']:has([data-stile])"
-                " div[data-testid='stButton']{height:0!important;min-height:0!important;"
-                "overflow:hidden!important;margin:0!important;padding:0!important;}"
-                "div[data-testid='stVerticalBlock']:has([data-stile])"
-                " div[data-testid='stButton'] button{display:none!important;}"
-                "</style>",
-                unsafe_allow_html=True
-            )
+            # ── Tile row: unique ID span → CSS sibling selector styles matching button ──
+            # Inject one big CSS block that styles each tile button by its unique span sibling
+            TILE_BTN_CSS = "<style>"
+            for _key, _cfg in TILE_CFG.items():
+                _is_act = (active == _key)
+                _num    = _cfg['num']
+                _bg     = '#1e0d00' if _is_act else _cfg['bg']
+                _border = _cfg['ba'] if _is_act else 'rgba(255,255,255,0.09)'
+                _glow   = _num + '50' if _is_act else _num + '18'
+                TILE_BTN_CSS += (
+                    "div:has(#tid-" + _key + ") + div button,"
+                    "div:has(#tid-" + _key + ") + div + div button{"
+                    "background:" + _bg + "!important;"
+                    "border:2px solid " + _border + "!important;"
+                    "color:" + _num + "!important;"
+                    "box-shadow:0 4px 28px " + _glow + "!important;"
+                    "border-radius:16px!important;"
+                    "width:100%!important;"
+                    "min-height:115px!important;"
+                    "font-size:2.55rem!important;"
+                    "font-weight:900!important;"
+                    "line-height:1.1!important;"
+                    "white-space:pre-line!important;"
+                    "padding:1.1rem 0.4rem!important;"
+                    "transition:transform 0.15s,box-shadow 0.15s!important;"
+                    "letter-spacing:-0.03em!important;}"
+                    "div:has(#tid-" + _key + ") + div button:hover,"
+                    "div:has(#tid-" + _key + ") + div + div button:hover{"
+                    "transform:translateY(-4px)!important;"
+                    "box-shadow:0 14px 36px " + _glow + "!important;}"
+                )
+            TILE_BTN_CSS += "</style>"
+            st.markdown(TILE_BTN_CSS, unsafe_allow_html=True)
 
             def render_tile_row(keys):
                 cols = st.columns(len(keys))
@@ -761,38 +782,17 @@ def display_scanner_page():
                     cfg    = TILE_CFG[key]
                     is_act = (active == key)
                     num    = cfg['num']
-                    bg     = '#1e0d00' if is_act else cfg['bg']
-                    border = cfg['ba']  if is_act else 'rgba(255,255,255,0.08)'
-                    glow   = num + '50' if is_act else num + '18'
-                    arrow  = '\u25b6 '  if is_act else ''
+                    arrow  = '\u25b6  ' if is_act else ''
                     cnt_v  = str(TILE_COUNTS[key])
-                    lbl    = cfg['label'].upper()
-                    # JS: traverse up to stVerticalBlock, find the button, click it
-                    js = ("var vb=this.closest('[data-testid=\"stVerticalBlock\"]');"
-                          "if(vb){var b=vb.querySelector('button');if(b)b.click();}")
-                    visual = (
-                        '<div data-stile="' + key + '" onclick="' + js + '" style="'
-                        'background:' + bg + ';border:2px solid ' + border + ';'
-                        'border-radius:16px;height:115px;'
-                        'padding:1.3rem 0.5rem 0;text-align:center;'
-                        'box-shadow:0 4px 28px ' + glow + ';'
-                        'position:relative;overflow:hidden;cursor:pointer;">'
-                        '<div style="position:absolute;top:-32px;left:50%;transform:translateX(-50%);'
-                        'width:80%;height:64px;pointer-events:none;'
-                        'background:radial-gradient(ellipse,' + num + '1a 0%,transparent 70%);"></div>'
-                        '<div style="font-size:2.6rem;font-weight:900;color:' + num + ';'
-                        'line-height:1;letter-spacing:-0.04em;'
-                        'font-family:Consolas,monospace;">' + cnt_v + '</div>'
-                        '<div style="font-size:0.62rem;color:rgba(255,255,255,0.4);'
-                        'text-transform:uppercase;letter-spacing:0.13em;'
-                        'margin-top:0.38rem;font-weight:700;">' + arrow + lbl + '</div>'
-                        '</div>'
-                    )
+                    lbl    = cfg['label']
+                    # Span with unique ID acts as CSS anchor for the sibling button
+                    btn_lbl = cnt_v + '\n' + arrow + lbl.upper()
                     with col:
-                        st.markdown(visual, unsafe_allow_html=True)
-                        # Hidden button (zero height via CSS above) - clicked by JS onclick
-                        if st.button('\u200b', key='tile_' + key,
-                                     use_container_width=True):
+                        st.markdown('<span id="tid-' + key + '"></span>',
+                                    unsafe_allow_html=True)
+                        if st.button(btn_lbl, key='tile_' + key,
+                                     use_container_width=True,
+                                     help='Filter: ' + lbl):
                             st.session_state['scanner_filter'] = 'All' if is_act else key
                             st.rerun()
 
