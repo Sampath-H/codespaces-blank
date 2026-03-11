@@ -697,19 +697,6 @@ def display_scanner_page():
                 """)
 
         # Header + Search
-        st.markdown("""
-        <div style="background:linear-gradient(135deg,#0a1628 0%,#0f2040 100%);
-             border-radius:14px;padding:1.5rem 1.8rem;margin-bottom:1.2rem;
-             border:1px solid rgba(255,255,255,0.07);
-             box-shadow:0 4px 24px rgba(0,0,0,0.4);">
-          <div style="font-size:1.5rem;font-weight:800;color:#fff;margin-bottom:0.2rem;">
-            📊 Stock Scanner
-          </div>
-          <div style="color:#8899bb;font-size:0.85rem;">
-            Friday cluster analysis &amp; signal detection
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
         search_term = st.text_input("", placeholder="🔍  Search by stock symbol...", key="scanner_search",
                                     label_visibility="collapsed")
         df_search   = df[df['Stock'].str.contains(search_term.upper(), na=False)] if search_term else df

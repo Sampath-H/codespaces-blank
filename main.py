@@ -843,15 +843,25 @@ def main():
 
 
 
-    # Header
-    st.markdown("""
+    # Page-specific headers + routing
+    PAGE_HEADERS = {
+        "Dashboard":    ("📊 AlgoTrade Pro",      "Professional Algorithmic Trading Platform"),
+        "Scanner":      ("🔍 Stock Scanner",       "Friday cluster analysis & signal detection"),
+        "Algo Trading": ("🤖 Algo Trading",        "Automated strategy execution"),
+        "Strategies":   ("📐 Strategies",          "Build and manage trading strategies"),
+        "Backtest":     ("📈 Backtesting",         "Test strategies on historical data"),
+        "Reports":      ("📋 Reports",             "Performance analytics and trade history"),
+        "Settings":     ("⚙️ Settings",            "Configure your platform preferences"),
+    }
+    page_key = next((k for k in PAGE_HEADERS if k in page), "Dashboard")
+    h_title, h_sub = PAGE_HEADERS[page_key]
+    st.markdown(f"""
     <div class="header-container">
-        <h1>📊 AlgoTrade Pro</h1>
-        <p>Professional Algorithmic Trading Platform</p>
+        <h1>{h_title}</h1>
+        <p>{h_sub}</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Page Routing
     if "Dashboard" in page:
         display_dashboard()
     elif "Scanner" in page:
