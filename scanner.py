@@ -961,10 +961,11 @@ def display_scanner_page():
 
             st.markdown(tile_css(active, TILE_CFG, TILE_COUNTS), unsafe_allow_html=True)
 
-            def render_tile_row(keys, row_class):
+            def render_tile_row(keys, row_class, col_widths=None):
                 # Inject class marker inside the row so :has() can scope the CSS
                 # We put it as the FIRST element inside the first column
-                cols = st.columns(len(keys))
+                widths = col_widths if col_widths else len(keys)
+                cols = st.columns(widths)
                 for i, (col, key) in enumerate(zip(cols, keys)):
                     cfg    = TILE_CFG[key]
                     is_act = (active == key)
@@ -986,11 +987,54 @@ def display_scanner_page():
                             st.rerun()
 
             if analysis_method == 'cluster':
-                render_tile_row(['All', 'Cluster', 'Strong'], 'tile-row-0')
+                # Row 1: 3 tiles across 4 equal columns (first tile spans cols 1-2 area)
+                row1_cols = st.columns([1, 1, 1, 1])
+                keys_row1 = ['All', 'Cluster', 'Strong']
+                tile_placements = [(0, 1), (2,), (3,)]  # col indices for each tile
+                
+                # Marker span for CSS scoping
+                with row1_cols[0]:
+                    st.markdown(
+                        '<span class="tile-row-0" style="display:none;"></span>',
+                        unsafe_allow_html=True
+                    )
+                
+                for tile_idx, key in enumerate(keys_row1):
+                    cfg = TILE_CFG[key]
+                    is_act = (active == key)
+                    cnt_v = str(TILE_COUNTS[key])
+                    lbl = cfg['label']
+                    arrow = '\u25b6  ' if is_act else ''
+                    btn_lbl = cnt_v + '\n' + arrow + lbl.upper()
+                    
+                    if tile_idx == 0:
+                        # First tile spans 2 columns - put in col 0
+                        with row1_cols[0]:
+                            if st.button(btn_lbl, key='tile_' + key,
+                                         use_container_width=True,
+                                         help='Filter: ' + lbl):
+                                st.session_state['scanner_filter'] = 'All' if is_act else key
+                                st.rerun()
+                        # Leave col 1 empty (acts as part of the wider first tile visual space)
+                    elif tile_idx == 1:
+                        with row1_cols[2]:
+                            if st.button(btn_lbl, key='tile_' + key,
+                                         use_container_width=True,
+                                         help='Filter: ' + lbl):
+                                st.session_state['scanner_filter'] = 'All' if is_act else key
+                                st.rerun()
+                    elif tile_idx == 2:
+                        with row1_cols[3]:
+                            if st.button(btn_lbl, key='tile_' + key,
+                                         use_container_width=True,
+                                         help='Filter: ' + lbl):
+                                st.session_state['scanner_filter'] = 'All' if is_act else key
+                                st.rerun()
+
                 st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
-                render_tile_row(['Bullish', 'Bearish', 'Breakout', 'Breakdown'], 'tile-row-1')
+                render_tile_row(['Bullish', 'Bearish', 'Breakout', 'Breakdown'], 'tile-row-1', col_widths=[1, 1, 1, 1])
             else:
-                render_tile_row(['All', 'Bullish', 'Bearish'], 'tile-row-basic')
+                render_tile_row(['All', 'Bullish', 'Bearish'], 'tile-row-basic', col_widths=[1, 1, 1])
 
             st.markdown(
                 '<div style="margin:0.8rem 0 0.4rem;'

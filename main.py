@@ -676,7 +676,19 @@ def main():
     <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
 
-    * { font-family: 'DM Sans', 'Segoe UI', sans-serif !important; }
+    * {
+        font-family: 'DM Sans', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* ─── Completely hide sidebar toggle buttons ─── */
+    /* Old Streamlit (<1.38) test IDs */
+    [data-testid="collapsedControl"] { display: none !important; }
+    [data-testid="stSidebarCollapse"] { display: none !important; }
+    /* New Streamlit (>=1.38) test IDs */
+    [data-testid="stSidebarCollapseButton"] { display: none !important; }
+    button[kind="header"] { display: none !important; }
+    header[data-testid="stHeader"] { display: none !important; }
+    .stAppHeader { display: none !important; }
 
     /* ─── App background ─────────────────────────── */
     .stApp { background: #070d1a !important; }
@@ -821,22 +833,31 @@ def main():
         box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
     }
 
-    /* ─── Hide keyboard_double_arrow_left raw text ───────────────── */
-    /* Sidebar toggle spans holding the material icon text */
-    [data-testid="collapsedControl"] span:not([data-testid]),
-    [data-testid="expandedControl"] span:not([data-testid]) {
-        display: none !important;
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #0a0f1e !important;
+        border-right: 1px solid rgba(255,255,255,0.06) !important;
     }
-    button[kind="header"] {
-        font-size: 0 !important;
-        color: transparent !important;
+    
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBg"] {
+        background-color: transparent !important;
     }
-    button[kind="header"] svg { font-size: initial !important; color: white !important; }
-
-    /* Hide Navigation label above radio */
-    section[data-testid="stSidebar"] .stRadio > label,
-    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
-        display: none !important;
+    
+    [data-testid="stSidebar"] .stRadio > label {
+        background-color: transparent !important;
+        padding: 0.75rem 0 !important;
+    }
+    
+    [data-testid="stSidebar"] .stRadio > label > div {
+        background-color: #0d1628 !important;
+        padding: 0.75rem 1rem !important;
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+    }
+    
+    [data-testid="stSidebar"] .stRadio > label:has(input:checked) > div {
+        background-color: rgba(59,130,246,0.15) !important;
+        color: #e0e8ff !important;
     }
 
     /* ─── Scrollbar ───────────────────────────────── */
