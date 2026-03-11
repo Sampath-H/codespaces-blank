@@ -848,19 +848,24 @@ def main():
 
     # Sidebar Navigation
     with st.sidebar:
-        # Logo / brand
+        # Logo
         st.markdown("""
-        <div style="padding:1rem 0 0.5rem;text-align:center;">
-          <div style="font-size:1.8rem;font-weight:800;color:#fff;letter-spacing:-0.03em;">
+        <div style="padding:0.8rem 0 0.5rem;">
+          <div style="font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:-0.03em;">
             📊 AlgoTrade <span style="color:#f59e0b;">Pro</span>
           </div>
-          <div style="font-size:0.72rem;color:#8899bb;letter-spacing:0.12em;
+          <div style="font-size:0.68rem;color:#5a7a9a;letter-spacing:0.12em;
                text-transform:uppercase;margin-top:2px;">
             Algorithmic Trading Platform
           </div>
         </div>
-        <hr style="border:none;border-top:1px solid #2d2d44;margin:0.75rem 0;">
         """, unsafe_allow_html=True)
+
+        # Search bar
+        st.text_input("", placeholder="🔍  Search...",
+                      key="sidebar_search", label_visibility="collapsed")
+
+        st.markdown('<hr style="border:none;border-top:1px solid #1e2a42;margin:0.4rem 0 0.2rem;">', unsafe_allow_html=True)
 
         page = st.radio(
             "Navigation",
@@ -868,6 +873,7 @@ def main():
              "📐  Strategies", "📈  Backtest", "📋  Reports", "⚙️  Settings"],
             label_visibility="collapsed"
         )
+        st.markdown('<hr style="border:none;border-top:1px solid #1e2a42;margin:0.2rem 0;">', unsafe_allow_html=True)
 
 
 

@@ -504,69 +504,168 @@ def display_scanner_page():
         st.rerun()
 
     # ============================================================
-    # MAIN CONTENT: Scanner Configuration + controls
+    # SIDEBAR: Full scanner configuration (styled like reference UI)
     # ============================================================
 
-    # ---- Info bar ----
-    last_friday = get_last_friday()
-    weekdays    = get_weekdays_since_friday(last_friday)
-    st.markdown(
-        f"""<div style="background:#0d1f38;border:1px solid rgba(59,130,246,0.3);
-        border-radius:10px;padding:0.6rem 1.2rem;margin-bottom:1rem;font-size:0.85rem;color:#7a9fc4;">
-        📅 <b>Reference Friday:</b> {last_friday.strftime('%A, %B %d, %Y')}
-        &nbsp;|&nbsp; <b>Trading days since:</b> {len(weekdays)}
-        </div>""",
-        unsafe_allow_html=True
-    )
-
-    # ---- Configuration row ----
-    cfg_col1, cfg_col2, cfg_col3 = st.columns([1.2, 2, 1])
-
-    with cfg_col1:
-        st.markdown("**📂 Stock Universe**")
-        stock_universe = st.radio(
-            "Stock Universe",
-            ["Nifty 500", "F&O Stocks"],
-            index=0,
-            label_visibility="collapsed",
-            key="scanner_universe"
-        )
-        uploaded_file = st.file_uploader(
-            "Upload custom CSV",
-            type=['csv'],
-            help="CSV with a 'Symbol' column",
-            key="scanner_csv"
-        )
-
-    with cfg_col2:
-        st.markdown("**🔍 Scanner Type**")
-        analysis_type = st.radio(
-            "Scanner Type",
-            [
-                "Current Signals",
-                "Current Signals with Cluster Analysis",
-                "Daily Breakout Tracking",
-                "Monthly Marubozu Open Scan",
-            ],
-            label_visibility="collapsed",
-            key="scanner_type"
-        )
-
-    with cfg_col3:
-        st.markdown("&nbsp;")
-        run_clicked = st.button("🚀 Run Analysis", type="primary",
-                                use_container_width=True, key="run_analysis_btn")
-
-    st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:0.8rem 0;">', unsafe_allow_html=True)
-
-    # ---- Load symbols ----
-    symbols = []
     def _load_symbols(df):
         for col in df.columns:
             if col.strip().lower() in ['symbol', 'symbols']:
                 return df[col].dropna().tolist()
         return None
 
+    # CSS for the scanner sidebar panels
+    st.sidebar.markdown("""
+    <style>
+    /* ── Scanner sidebar custom styles ── */
+    section[data-testid="stSidebar"] { overflow-y: auto; }
+
+    /* Section headers */
+    .sc-section {
+        font-size: 0.68rem; font-weight: 700; color: #5a7a9a;
+        letter-spacing: 0.14em; text-transform: uppercase;
+        padding: 0.9rem 0 0.4rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    /* Universe item buttons */
+    div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button {
+        background: transparent !important;
+        border: none !important;
+        color: #8899bb !important;
+        text-align: left !important;
+        padding: 0.55rem 0.8rem !important;
+        border-radius: 10px !important;
+        font-size: 0.92rem !important;
+        font-weight: 500 !important;
+        width: 100% !important;
+        transition: background 0.15s !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button:hover {
+        background: rgba(255,255,255,0.06) !important;
+        color: #ffffff !important;
+    }
+
+    /* Active universe item */
+    .univ-active button {
+        background: rgba(59,130,246,0.15) !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    /* Scanner type radio */
+    div[data-testid="stSidebar"] div[data-testid="stRadio"] label {
+        font-size: 0.9rem !important;
+        color: #8899bb !important;
+        padding: 0.42rem 0.3rem !important;
+        cursor: pointer !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {
+        border-color: #3b4a66 !important; width:16px !important; height:16px !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stRadio"] [aria-checked="true"] > div:first-child {
+        background: #e05252 !important; border-color: #e05252 !important;
+    }
+
+    /* Run Analysis button */
+    div[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
+        background: linear-gradient(135deg, #e53e3e, #c53030) !important;
+        border: none !important; color: #fff !important;
+        font-size: 1rem !important; font-weight: 700 !important;
+        border-radius: 12px !important; height: 52px !important;
+        letter-spacing: 0.04em !important;
+        box-shadow: 0 4px 20px rgba(229,62,62,0.4) !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
+        box-shadow: 0 6px 28px rgba(229,62,62,0.6) !important;
+        transform: translateY(-2px) !important;
+    }
+
+    /* File uploader compact */
+    div[data-testid="stSidebar"] div[data-testid="stFileUploader"] {
+        border: 1px dashed rgba(255,255,255,0.15) !important;
+        border-radius: 10px !important;
+        padding: 0.5rem !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stFileUploader"] span { font-size:0.8rem !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Stock Universe section ──
+    st.sidebar.markdown('<div class="sc-section">📂 &nbsp;Stock Universe</div>', unsafe_allow_html=True)
+
+    if 'scanner_universe' not in st.session_state:
+        st.session_state['scanner_universe'] = 'Nifty 500'
+
+    u_col1, u_col2 = st.sidebar.columns(2)
+    nifty_active = st.session_state['scanner_universe'] == 'Nifty 500'
+    fo_active    = st.session_state['scanner_universe'] == 'F&O Stocks'
+
+    with u_col1:
+        if nifty_active:
+            st.markdown('<div class="univ-active">', unsafe_allow_html=True)
+        if st.button("🗃️  Nifty 500", key="btn_nifty", use_container_width=True):
+            st.session_state['scanner_universe'] = 'Nifty 500'
+            st.rerun()
+        if nifty_active:
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    with u_col2:
+        if fo_active:
+            st.markdown('<div class="univ-active">', unsafe_allow_html=True)
+        if st.button("📊  F&O Stocks", key="btn_fo", use_container_width=True):
+            st.session_state['scanner_universe'] = 'F&O Stocks'
+            st.rerun()
+        if fo_active:
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    stock_universe = st.session_state['scanner_universe']
+
+    # ── Scanner Type section ──
+    st.sidebar.markdown('<div class="sc-section">🔍 &nbsp;Configure Scanner</div>', unsafe_allow_html=True)
+    analysis_type = st.sidebar.radio(
+        "Scanner Type",
+        ["Current Signals",
+         "Current Signals with Cluster Analysis",
+         "Daily Breakout Tracking",
+         "Monthly Marubozu Open Scan"],
+        label_visibility="collapsed",
+        key="scanner_type"
+    )
+
+    # ── Data Upload section ──
+    st.sidebar.markdown('<div class="sc-section">⬆️ &nbsp;Data Upload</div>', unsafe_allow_html=True)
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload CSV",
+        type=['csv'],
+        help="CSV with a 'Symbol' column",
+        key="scanner_csv",
+        label_visibility="collapsed"
+    )
+
+    # ── Run Analysis button ──
+    st.sidebar.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+    run_clicked = st.sidebar.button("🚀  RUN ANALYSIS", type="primary",
+                                    use_container_width=True, key="run_analysis_btn")
+
+    # ── Info bar (main area) ──
+    last_friday = get_last_friday()
+    weekdays    = get_weekdays_since_friday(last_friday)
+    st.markdown(
+        f"""<div style="background:#0d1a2e;border:1px solid rgba(59,130,246,0.2);
+        border-radius:10px;padding:0.55rem 1.1rem;margin-bottom:1rem;
+        font-size:0.82rem;color:#7a9fc4;display:flex;gap:1.5rem;">
+        <span>📅 <b>Friday:</b> {last_friday.strftime('%b %d, %Y')}</span>
+        <span>📆 <b>Days since:</b> {len(weekdays)}</span>
+        <span>📦 <b>Universe:</b> {stock_universe}</span>
+        </div>""",
+        unsafe_allow_html=True
+    )
+
+    # ---- Load symbols ----
+    symbols = []
     if uploaded_file is not None:
         try:
             df_sym = pd.read_csv(uploaded_file)
@@ -575,7 +674,6 @@ def display_scanner_page():
                 st.error("CSV must have a 'Symbol' column")
                 return
             symbols = syms
-            st.success(f"✅ Loaded {len(symbols)} symbols from uploaded file")
         except Exception as e:
             st.error(f"Error reading CSV: {e}")
             return
@@ -602,20 +700,14 @@ def display_scanner_page():
             st.error(f"Error reading stock file: {e}")
             return
 
-    # Add .NS suffix if not present
-    symbols = [s.strip() + '.NS' if not str(s).strip().endswith('.NS') else str(s).strip() for s in symbols if str(s).strip()]
-
-    st.markdown(
-        f'<div style="color:#6b8fb5;font-size:0.8rem;margin-bottom:0.5rem;">'
-        f'Using <b style="color:#e0e8ff;">{len(symbols)}</b> stocks — {stock_universe}</div>',
-        unsafe_allow_html=True
-    )
+    symbols = [s.strip() + '.NS' if not str(s).strip().endswith('.NS') else str(s).strip()
+               for s in symbols if str(s).strip()]
 
     analysis_method = "basic"
     if analysis_type == "Current Signals with Cluster Analysis":
         analysis_method = "cluster"
 
-    # ---- Run analysis button ----
+    # ---- Run analysis ----
     if run_clicked:
         if not symbols:
             st.error("No symbols to analyze")
