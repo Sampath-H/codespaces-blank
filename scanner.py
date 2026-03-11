@@ -491,12 +491,25 @@ def scan_monthly_red_open(symbols):
 
 def display_scanner_page():
     """Main scanner page UI — full-featured port from trade.py."""
-    st.title("📊 Stock Scanner")
-    st.markdown("---")
+
+    # ── Handle tile-click filter via query params ──────────────────────────
+    qp = st.query_params
+    if 'sf' in qp:
+        val = qp['sf']
+        if val == 'All':
+            st.session_state['scanner_filter'] = 'All'
+        else:
+            st.session_state['scanner_filter'] = val
+        st.query_params.clear()
+        st.rerun()
 
     # ---- Sidebar: Stock Universe ----
-    st.sidebar.title("Configuration")
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("""
+    <div style="font-size:0.65rem;font-weight:700;color:#f59e0b;
+         letter-spacing:0.15em;text-transform:uppercase;margin-bottom:0.6rem;">
+    ⚙️ Configuration
+    </div>
+    """, unsafe_allow_html=True)
     st.sidebar.markdown("### 📂 Stock Universe")
     stock_universe = st.sidebar.radio(
         "Select Stock Universe",
@@ -662,8 +675,22 @@ def display_scanner_page():
 - **Neutral**: No breakout/breakdown yet
                 """)
 
-        # Search
-        search_term = st.text_input("\U0001f50d Search stocks", placeholder="Enter stock symbol...", key="scanner_search")
+        # Header + Search
+        st.markdown("""
+        <div style="background:linear-gradient(135deg,#0a1628 0%,#0f2040 100%);
+             border-radius:14px;padding:1.5rem 1.8rem;margin-bottom:1.2rem;
+             border:1px solid rgba(255,255,255,0.07);
+             box-shadow:0 4px 24px rgba(0,0,0,0.4);">
+          <div style="font-size:1.5rem;font-weight:800;color:#fff;margin-bottom:0.2rem;">
+            📊 Stock Scanner
+          </div>
+          <div style="color:#8899bb;font-size:0.85rem;">
+            Friday cluster analysis &amp; signal detection
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        search_term = st.text_input("", placeholder="🔍  Search by stock symbol...", key="scanner_search",
+                                    label_visibility="collapsed")
         df_search   = df[df['Stock'].str.contains(search_term.upper(), na=False)] if search_term else df
 
         if df_search.empty:
@@ -693,72 +720,103 @@ def display_scanner_page():
                 'Breakdown': ('#ef4444', '#2d0000'),
             }
 
-            # ── Base tile CSS (applied once) ─────────────────────────────
+            # -- Pure HTML tile grid ------------------------------------------------
+            active = st.session_state.get('scanner_filter', 'All')
+
+            TILE_CFG = {
+                'All':       {'num': '#ffffff', 'bg': '#0f172a', 'label': 'Total Stocks'},
+                'Cluster':   {'num': '#38bdf8', 'bg': '#0c1e30', 'label': 'Cluster Returns'},
+                'Strong':    {'num': '#fbbf24', 'bg': '#1a1200', 'label': 'Strong Moves'},
+                'Bullish':   {'num': '#34d399', 'bg': '#052e1a', 'label': 'Bullish'},
+                'Bearish':   {'num': '#f87171', 'bg': '#2a0a0a', 'label': 'Bearish'},
+                'Breakout':  {'num': '#34d399', 'bg': '#052e1a', 'label': 'Breakout Returns'},
+                'Breakdown': {'num': '#f87171', 'bg': '#2a0a0a', 'label': 'Breakdown Returns'},
+            }
+            TILE_COUNTS = {
+                'All':       cnt_total,
+                'Cluster':   cnt_cluster   if analysis_method == 'cluster' else 0,
+                'Strong':    cnt_strong    if analysis_method == 'cluster' else 0,
+                'Bullish':   cnt_bullish,
+                'Bearish':   cnt_bearish,
+                'Breakout':  cnt_breakout  if analysis_method == 'cluster' else 0,
+                'Breakdown': cnt_breakdown if analysis_method == 'cluster' else 0,
+            }
+
+            HOVER_CSS = (
+                ".atile:hover{"
+                "transform:translateY(-5px)!important;"
+                "box-shadow:0 16px 44px rgba(0,0,0,0.65)!important;}"
+            )
+
+            def tile_row_html(keys):
+                pieces = []
+                for key in keys:
+                    cfg    = TILE_CFG[key]
+                    is_act = (active == key)
+                    num    = cfg['num']
+                    bg     = '#2a1500' if is_act else cfg['bg']
+                    border = '#f59e0b' if is_act else 'rgba(255,255,255,0.07)'
+                    glow   = num + '66' if is_act else num + '1a'
+                    arrow  = '\u25b6 ' if is_act else ''
+                    count_val = str(TILE_COUNTS[key])
+                    label_val = cfg['label']
+
+                    tile_html = (
+                        '<a href="?sf=' + key + '" style="text-decoration:none;flex:1;min-width:0;">'
+                        '<div class="atile" style="'
+                            'background:' + bg + ';'
+                            'border:2px solid ' + border + ';'
+                            'border-radius:16px;'
+                            'padding:1.3rem 0.5rem 1.1rem;'
+                            'text-align:center;cursor:pointer;'
+                            'box-shadow:0 4px 24px ' + glow + ',inset 0 1px 0 rgba(255,255,255,0.04);'
+                            'position:relative;overflow:hidden;'
+                            'transition:transform 0.18s,box-shadow 0.18s;">'
+                        # subtle radial glow behind number
+                        '<div style="'
+                            'position:absolute;top:-28px;left:50%;transform:translateX(-50%);'
+                            'width:80%;height:56px;'
+                            'background:radial-gradient(ellipse,' + num + '18 0%,transparent 70%);'
+                            'pointer-events:none;"></div>'
+                        # number
+                        '<div style="'
+                            'font-size:2.7rem;font-weight:900;color:' + num + ';'
+                            'line-height:1.0;letter-spacing:-0.04em;'
+                            'font-variant-numeric:tabular-nums;position:relative;">'
+                        + count_val +
+                        '</div>'
+                        # label
+                        '<div style="'
+                            'font-size:0.62rem;color:rgba(255,255,255,0.42);'
+                            'text-transform:uppercase;letter-spacing:0.13em;'
+                            'margin-top:0.4rem;font-weight:700;position:relative;">'
+                        + arrow + label_val +
+                        '</div>'
+                        '</div></a>'
+                    )
+                    pieces.append(tile_html)
+
+                row_html = (
+                    '<style>' + HOVER_CSS + '</style>'
+                    '<div style="display:flex;gap:0.7rem;margin-bottom:0.65rem;">'
+                    + ''.join(pieces)
+                    + '</div>'
+                )
+                st.markdown(row_html, unsafe_allow_html=True)
+
+            # Render rows
+            if analysis_method == 'cluster':
+                tile_row_html(['All', 'Cluster', 'Strong'])
+                tile_row_html(['Bullish', 'Bearish', 'Breakout', 'Breakdown'])
+            else:
+                tile_row_html(['All', 'Bullish', 'Bearish'])
+
             st.markdown(
-                "<style>"
-                "div[data-testid=\'stHorizontalBlock\'] div[data-testid=\'stButton\'] button {"
-                "border-radius:14px!important;width:100%!important;"
-                "font-weight:900!important;font-size:1.9rem!important;"
-                "line-height:1.2!important;min-height:90px!important;"
-                "padding:0.9rem 0.4rem!important;white-space:pre-line!important;"
-                "transition:border-color 0.15s,transform 0.15s!important;}"
-                "div[data-testid=\'stHorizontalBlock\'] div[data-testid=\'stButton\'] button:hover {"
-                "transform:translateY(-3px)!important;border-color:#f59e0b!important;"
-                "box-shadow:0 6px 20px rgba(0,0,0,0.5)!important;}"
-                "</style>",
+                '<div style="margin:0.6rem 0 0.8rem;'
+                'border-top:1px solid rgba(255,255,255,0.06);"></div>',
                 unsafe_allow_html=True
             )
 
-            def render_tiles(tiles):
-                act  = st.session_state.get('scanner_filter', 'All')
-                cols = st.columns(len(tiles))
-                for col, (label, count, key) in zip(cols, tiles):
-                    num_col, bg_dark = NUM_COLORS.get(key, ('#fff', '#1a1a2e'))
-                    is_act  = (act == key)
-                    border  = '#f59e0b' if is_act else '#2d2d44'
-                    bg      = '#2d1800' if is_act else bg_dark
-                    marker  = ' \u25cf' if is_act else ''
-                    # Per-button colour override
-                    with col:
-                        st.markdown(
-                            '<style>div[data-testid=\'stHorizontalBlock\'] '
-                            'div[data-testid=\'stColumn\']:nth-child(' + str(tiles.index((label,count,key))+1) + ') '
-                            'div[data-testid=\'stButton\'] button{'
-                            'background:' + bg + '!important;'
-                            'border:2.5px solid ' + border + '!important;'
-                            'color:' + num_col + '!important;}</style>',
-                            unsafe_allow_html=True
-                        )
-                        btn_lbl = str(count) + '\n' + label.upper() + marker
-                        if st.button(btn_lbl, key='tile_' + key,
-                                     use_container_width=True,
-                                     help='Show: ' + label):
-                            st.session_state['scanner_filter'] = 'All' if is_act else key
-                            st.rerun()
-
-            # ── Render tiles ─────────────────────────────────────────────
-            if analysis_method == 'cluster':
-                render_tiles([
-                    ('Total Stocks',     cnt_total,     'All'),
-                    ('Cluster Returns',  cnt_cluster,   'Cluster'),
-                    ('Strong Moves',     cnt_strong,    'Strong'),
-                ])
-                render_tiles([
-                    ('Bullish',          cnt_bullish,   'Bullish'),
-                    ('Bearish',          cnt_bearish,   'Bearish'),
-                    ('Breakout Returns', cnt_breakout,  'Breakout'),
-                    ('Breakdown Returns',cnt_breakdown,  'Breakdown'),
-                ])
-            else:
-                render_tiles([
-                    ('Total Stocks', cnt_total,   'All'),
-                    ('Bullish',      cnt_bullish, 'Bullish'),
-                    ('Bearish',      cnt_bearish, 'Bearish'),
-                ])
-
-            st.markdown("---")
-
-            # ── Filter map ───────────────────────────────────────────────
             active = st.session_state.get('scanner_filter', 'All')
             FILTER_MAP = {
                 'All':       df_search,
@@ -773,19 +831,31 @@ def display_scanner_page():
 
             # ── Active filter banner + Back button ───────────────────────
             if active != 'All':
-                bc1, bc2 = st.columns([3, 1])
-                with bc1:
-                    st.markdown(
-                        '<div style="background:#1a1200;border:1px solid #f59e0b;'
-                        'border-radius:8px;padding:0.5rem 1.2rem;margin-bottom:0.5rem;">'
-                        '\U0001f50d Showing: <b style=\'color:#f59e0b;font-size:1.1rem\'>' + active + '</b>'
-                        ' &mdash; <b>' + str(len(df_filtered)) + '</b> stocks</div>',
-                        unsafe_allow_html=True
-                    )
-                with bc2:
-                    if st.button("\u2190 Back to All Results", key="back_btn", use_container_width=True):
-                        st.session_state['scanner_filter'] = 'All'
-                        st.rerun()
+                num_col_active = TILE_CFG.get(active, {}).get('num', '#f59e0b')
+                count_active   = len(df_filtered)
+                banner_html = (
+                    '<div style="display:flex;align-items:center;justify-content:space-between;'
+                    'background:linear-gradient(135deg,#1c1000,#0d0a00);'
+                    'border:1.5px solid #f59e0b;border-radius:14px;'
+                    'padding:0.8rem 1.4rem;margin:0.4rem 0 0.8rem;">'
+                    '<div>'
+                    '<div style="color:#888;font-size:0.62rem;letter-spacing:0.15em;'
+                    'text-transform:uppercase;font-weight:700;">Filtered View</div>'
+                    '<div style="margin-top:0.2rem;">'
+                    '<span style="color:' + num_col_active + ';font-size:1.35rem;font-weight:900;">'
+                    + active + '</span>'
+                    '<span style="color:#999;font-size:0.9rem;"> &mdash; </span>'
+                    '<span style="color:#fff;font-size:1.1rem;font-weight:700;">' + str(count_active) + '</span>'
+                    '<span style="color:#888;font-size:0.82rem;"> stocks</span>'
+                    '</div></div>'
+                    '<a href="?sf=All" style="text-decoration:none;">'
+                    '<div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);'
+                    'border-radius:8px;padding:0.45rem 1rem;font-size:0.78rem;color:#ccc;'
+                    'font-weight:600;transition:background 0.15s;">'
+                    '← All Results</div></a>'
+                    '</div>'
+                )
+                st.markdown(banner_html, unsafe_allow_html=True)
 
             # ── Styled table ─────────────────────────────────────────────
             styled_df = df_filtered.style.map(color_signal, subset=['Signal'])

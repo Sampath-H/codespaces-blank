@@ -671,214 +671,131 @@ def main():
         initial_sidebar_state="expanded"
     )
 
-    # AlgoRooms Professional Styling
+    # Global Styling
     st.markdown("""
     <style>
-    * {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+
+    * { font-family: 'DM Sans', 'Segoe UI', sans-serif !important; }
+
+    /* ─── App background ─────────────────────────── */
+    .stApp { background: #070d1a !important; }
+    section[data-testid="stSidebar"] { background: #0a0f1e !important; border-right: 1px solid rgba(255,255,255,0.06) !important; }
+
+    /* ─── Sidebar nav radio ───────────────────────── */
+    div[data-testid="stRadio"] label {
+        font-size: 0.9rem !important;
+        color: #8899bb !important;
+        padding: 0.45rem 0.7rem !important;
+        border-radius: 8px !important;
+        transition: background 0.15s, color 0.15s !important;
+        display: block !important;
     }
-    
-    body, .main {
-        background-color: #ffffff;
-    }
-    
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background-color: #1a1a2e !important;
-        border-right: 1px solid #2d2d44;
-    }
-    
-    [data-testid="stSidebar"] [data-testid="stVerticalBlockBg"] {
-        background-color: #1a1a2e !important;
-    }
-    
-    /* Force sidebar text to be visible */
-    [data-testid="stSidebar"] * {
-        color: #e0e0e0 !important;
-    }
-    
-    [data-testid="stSidebar"] .stRadio > label {
-        background-color: transparent !important;
-        padding: 0.75rem 0 !important;
-    }
-    
-    [data-testid="stSidebar"] .stRadio > label > div {
-        background-color: #252540 !important;
-        padding: 0.75rem 1rem !important;
-        border-radius: 8px;
-        margin-bottom: 0.5rem;
-        color: #e0e0e0 !important;
-    }
-    
-    [data-testid="stSidebar"] .stRadio > label > div:hover {
-        background-color: #2d2d50 !important;
-    }
-    
-    [data-testid="stSidebar"] .stRadio > label:has(input:checked) > div {
-        background-color: #003d82 !important;
-        color: #ffffff !important;
-    }
-    
-    [data-testid="stSidebar"] h3, [data-testid="stSidebar"] h4 {
-        color: #ffffff !important;
-    }
-    
-    [data-testid="stSidebar"] .stButton > button {
-        background-color: #ef4444 !important;
-        color: white !important;
+    div[data-testid="stRadio"] label:hover { background: rgba(255,255,255,0.05) !important; color: #fff !important; }
+    div[data-testid="stRadio"] [aria-checked="true"] + label,
+    div[data-testid="stRadio"] label:has(+ [aria-checked="true"]) { color: #fff !important; }
+
+    /* ─── Sidebar run button ──────────────────────── */
+    section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
+        background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+        color: #fff !important;
         border: none !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        font-size: 0.9rem !important;
+        padding: 0.6rem !important;
+        box-shadow: 0 4px 16px rgba(220,38,38,0.4) !important;
+        transition: transform 0.15s, box-shadow 0.15s !important;
     }
-    
-    /* Header */
+    section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 24px rgba(220,38,38,0.5) !important;
+    }
+    /* Logout button — last button in sidebar */
+    section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button {
+        background: rgba(255,255,255,0.05) !important;
+        color: #aab !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        box-shadow: none !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button:hover {
+        background: rgba(220,38,38,0.15) !important;
+        color: #f87171 !important;
+        border-color: #f87171 !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+
+    /* ─── Page header banner ──────────────────────── */
     .header-container {
-        background-color: #0a1e3f;
-        color: white;
-        padding: 2rem;
-        border-radius: 10px;
-        margin-bottom: 2rem;
-    }
-    
-    .header-container h1 {
-        margin: 0;
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-    
-    .header-container p {
-        margin: 0.5rem 0 0 0;
-        opacity: 0.9;
-        font-size: 0.95rem;
-    }
-    
-    /* Metric Card - Yellow Highlight */
-    .metric-card {
-        background-color: #fef08a;
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        border-left: 4px solid #f59e0b;
-        margin-bottom: 1rem;
-        text-align: center;
-    }
-    
-    .metric-card h3 {
-        color: #1f2937;
-        margin: 0;
-        font-size: 1.8rem;
-        font-weight: 700;
-    }
-    
-    .metric-card p {
-        color: #666;
-        margin: 0.5rem 0 0 0;
-        font-size: 0.9rem;
-    }
-    
-    /* Form Section */
-    .form-section {
-        background-color: #ffffff;
-        padding: 1.5rem;
-        border-radius: 8px;
+        background: linear-gradient(135deg, #0a1628 0%, #0f2545 50%, #071020 100%);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 16px;
+        padding: 2rem 2.5rem;
         margin-bottom: 1.5rem;
-        border: 1px solid #e5e7eb;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
-    
-    .form-section h3 {
-        color: #1f2937;
-        margin-bottom: 1rem;
-        font-size: 1.1rem;
-        font-weight: 600;
+    .header-container h1 { color: #fff !important; font-weight: 900 !important; margin: 0 !important; font-size: 2rem !important; }
+    .header-container p  { color: #6b8fb5 !important; margin: 0.3rem 0 0 !important; font-size: 0.9rem !important; }
+
+    /* ─── Metric cards ────────────────────────────── */
+    .metric-card {
+        background: linear-gradient(135deg, #0d1c38 0%, #0a1428 100%);
+        border: 1px solid rgba(255,255,255,0.07);
+        border-radius: 14px;
+        padding: 1.4rem 1.6rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    
-    /* Selection Buttons */
-    .button-group {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-        margin-bottom: 1rem;
+
+    /* ─── Dataframe ───────────────────────────────── */
+    div[data-testid="stDataFrame"] {
+        border-radius: 12px !important;
+        overflow: hidden !important;
+        border: 1px solid rgba(255,255,255,0.07) !important;
     }
-    
-    .selection-button {
-        padding: 0.5rem 1.25rem;
-        border: 2px solid #d1d5db;
-        background-color: white;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 500;
-        color: #374151;
-        transition: all 0.3s ease;
-        font-size: 0.9rem;
+
+    /* ─── st.info / st.success banners ───────────────*/
+    div[data-testid="stAlert"] {
+        border-radius: 10px !important;
     }
-    
-    .selection-button:hover {
-        border-color: #003d82;
-        background-color: #f0f4ff;
+
+    /* ─── Expander ────────────────────────────────── */
+    details summary { font-weight: 600 !important; }
+
+    /* ─── Tabs ────────────────────────────────────── */
+    button[data-baseweb="tab"] {
+        font-weight: 600 !important;
+        font-size: 0.88rem !important;
     }
-    
-    .selection-button.active {
-        background-color: #fef08a;
-        border-color: #f59e0b;
-        color: #1f2937;
+
+    /* ─── Progress bar ────────────────────────────── */
+    div[data-testid="stProgress"] > div > div > div {
+        background: linear-gradient(90deg, #3b82f6, #f59e0b) !important;
+        border-radius: 4px !important;
     }
-    
-    /* Primary Button */
-    .primary-btn {
-        background-color: #003d82;
-        color: white;
-        padding: 0.75rem 1.5rem;
-        border: none;
-        border-radius: 6px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
+
+    /* ─── Input fields ────────────────────────────── */
+    div[data-testid="stTextInput"] input {
+        background: #0d1628 !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 10px !important;
+        color: #e0e8ff !important;
+        padding: 0.6rem 1rem !important;
+        font-size: 0.9rem !important;
     }
-    
-    .primary-btn:hover {
-        background-color: #002654;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 61, 130, 0.3);
+    div[data-testid="stTextInput"] input:focus {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
     }
-    
-    /* Dashboard Card */
-    .dashboard-card {
-        background: linear-gradient(135deg, #0a1e3f 0%, #1a3a5f 100%);
-        color: white;
-        padding: 2rem;
-        border-radius: 12px;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    
-    /* Status Indicators */
-    .status-online {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        background-color: #10b981;
-        border-radius: 50%;
-        margin-right: 0.5rem;
-    }
-    
-    .status-offline {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        background-color: #ef4444;
-        border-radius: 50%;
-        margin-right: 0.5rem;
-    }
-    
-    /* Value Colors */
-    .value-positive {
-        color: #10b981;
-        font-weight: 600;
-    }
-    
-    .value-negative {
-        color: #ef4444;
-        font-weight: 600;
-    }
+
+    /* ─── Scrollbar ───────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0f1e; }
+    ::-webkit-scrollbar-thumb { background: #2d3a55; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3b82f6; }
+
+    /* ─── Hide streamlit chrome ───────────────────── */
+    #MainMenu, footer { visibility: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
