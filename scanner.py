@@ -503,100 +503,121 @@ def display_scanner_page():
         st.query_params.clear()
         st.rerun()
 
-    # ---- Sidebar: Stock Universe ----
-    st.sidebar.markdown("""
-    <div style="font-size:0.65rem;font-weight:700;color:#f59e0b;
-         letter-spacing:0.15em;text-transform:uppercase;margin-bottom:0.6rem;">
-    ⚙️ Configuration
-    </div>
-    """, unsafe_allow_html=True)
-    st.sidebar.markdown("### 📂 Stock Universe")
-    stock_universe = st.sidebar.radio(
-        "Select Stock Universe",
-        ["Nifty 500", "F&O Stocks"],
-        index=0,
+    # ============================================================
+    # MAIN CONTENT: Scanner Configuration + controls
+    # ============================================================
+
+    # ---- Info bar ----
+    last_friday = get_last_friday()
+    weekdays    = get_weekdays_since_friday(last_friday)
+    st.markdown(
+        f"""<div style="background:#0d1f38;border:1px solid rgba(59,130,246,0.3);
+        border-radius:10px;padding:0.6rem 1.2rem;margin-bottom:1rem;font-size:0.85rem;color:#7a9fc4;">
+        📅 <b>Reference Friday:</b> {last_friday.strftime('%A, %B %d, %Y')}
+        &nbsp;|&nbsp; <b>Trading days since:</b> {len(weekdays)}
+        </div>""",
+        unsafe_allow_html=True
     )
 
-    uploaded_file = st.sidebar.file_uploader(
-        "Upload CSV file with stock symbols",
-        type=['csv'],
-        help="Upload a CSV file with a 'Symbol' column containing stock symbols",
-    )
+    # ---- Configuration row ----
+    cfg_col1, cfg_col2, cfg_col3 = st.columns([1.2, 2, 1])
+
+    with cfg_col1:
+        st.markdown("**📂 Stock Universe**")
+        stock_universe = st.radio(
+            "Stock Universe",
+            ["Nifty 500", "F&O Stocks"],
+            index=0,
+            label_visibility="collapsed",
+            key="scanner_universe"
+        )
+        uploaded_file = st.file_uploader(
+            "Upload custom CSV",
+            type=['csv'],
+            help="CSV with a 'Symbol' column",
+            key="scanner_csv"
+        )
+
+    with cfg_col2:
+        st.markdown("**🔍 Scanner Type**")
+        analysis_type = st.radio(
+            "Scanner Type",
+            [
+                "Current Signals",
+                "Current Signals with Cluster Analysis",
+                "Daily Breakout Tracking",
+                "Both",
+                "Monthly Marubozu Open Scan",
+            ],
+            label_visibility="collapsed",
+            key="scanner_type"
+        )
+
+    with cfg_col3:
+        st.markdown("&nbsp;")
+        run_clicked = st.button("🚀 Run Analysis", type="primary",
+                                use_container_width=True, key="run_analysis_btn")
+
+    st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.07);margin:0.8rem 0;">', unsafe_allow_html=True)
+
+    # ---- Load symbols ----
+    symbols = []
+    def _load_symbols(df):
+        for col in df.columns:
+            if col.strip().lower() in ['symbol', 'symbols']:
+                return df[col].dropna().tolist()
+        return None
 
     if uploaded_file is not None:
         try:
-            symbols_df = pd.read_csv(uploaded_file)
-            symbol_col = None
-            for col in symbols_df.columns:
-                if col.lower() in ['symbol', 'symbols']:
-                    symbol_col = col
-                    break
-            if symbol_col is None:
-                st.sidebar.error("CSV file must contain a 'Symbol' or 'SYMBOL' column")
+            df_sym = pd.read_csv(uploaded_file)
+            syms = _load_symbols(df_sym)
+            if syms is None:
+                st.error("CSV must have a 'Symbol' column")
                 return
-            symbols = symbols_df[symbol_col].tolist()
-            st.sidebar.success(f"Loaded {len(symbols)} symbols from uploaded file")
+            symbols = syms
+            st.success(f"✅ Loaded {len(symbols)} symbols from uploaded file")
         except Exception as e:
-            st.sidebar.error(f"Error reading CSV file: {e}")
+            st.error(f"Error reading CSV: {e}")
             return
     else:
         try:
             if stock_universe == "Nifty 500":
-                symbols_df = pd.read_csv("stocks_500.csv")
-                symbols = symbols_df['Symbol'].tolist()
-                st.sidebar.info(f"Using Nifty 500 ({len(symbols)} stocks)")
-            else:
-                symbols_df = pd.read_csv("NSE_FO_Stocks_NS.csv")
-                symbol_col = None
-                for col in symbols_df.columns:
-                    if col.lower() in ['symbol', 'symbols']:
-                        symbol_col = col
-                        break
-                if symbol_col is None:
-                    st.sidebar.error("F&O CSV must contain a 'Symbol' or 'SYMBOL' column")
+                df_sym = pd.read_csv("stocks_500.csv")
+                syms = _load_symbols(df_sym)
+                if syms is None:
+                    st.error("stocks_500.csv must have a 'Symbol' column")
                     return
-                symbols = symbols_df[symbol_col].tolist()
-                st.sidebar.info(f"Using F&O Stocks ({len(symbols)} stocks)")
-        except FileNotFoundError:
-            st.sidebar.error("Default stocks file not found. Please upload a CSV file.")
+                symbols = syms
+            else:
+                df_sym = pd.read_csv("NSE_FO_Stocks_NS.csv")
+                syms = _load_symbols(df_sym)
+                if syms is None:
+                    st.error("NSE_FO_Stocks_NS.csv must have a 'Symbol' column")
+                    return
+                symbols = syms
+        except FileNotFoundError as e:
+            st.error(f"Stock file not found: {e}")
             return
         except Exception as e:
-            st.sidebar.error(f"Error reading default stocks file: {e}")
+            st.error(f"Error reading stock file: {e}")
             return
 
     # Add .NS suffix if not present
-    symbols = [s + '.NS' if not s.endswith('.NS') else s for s in symbols]
+    symbols = [s.strip() + '.NS' if not str(s).strip().endswith('.NS') else str(s).strip() for s in symbols if str(s).strip()]
 
-    # ---- Sidebar: Analysis Type ----
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔍 Scanner Type")
-    analysis_type = st.sidebar.radio(
-        "Choose Scanner",
-        [
-            "Current Signals",
-            "Current Signals with Cluster Analysis",
-            "Daily Breakout Tracking",
-            "Both",
-            "Monthly Marubozu Open Scan",
-        ],
-        label_visibility="collapsed",
+    st.markdown(
+        f'<div style="color:#6b8fb5;font-size:0.8rem;margin-bottom:0.5rem;">'
+        f'Using <b style="color:#e0e8ff;">{len(symbols)}</b> stocks — {stock_universe}</div>',
+        unsafe_allow_html=True
     )
 
     analysis_method = "basic"
     if analysis_type in ["Current Signals with Cluster Analysis", "Both"]:
         analysis_method = "cluster"
 
-    # ---- Info bar ----
-    last_friday = get_last_friday()
-    weekdays = get_weekdays_since_friday(last_friday)
-    st.info(
-        f"📅 Reference Friday: {last_friday.strftime('%A, %B %d, %Y')} "
-        f"| Trading days since: {len(weekdays)}"
-    )
-
     # ---- Run analysis button ----
-    # Only scan when the button is pressed — save results to session_state
-    if st.sidebar.button("\U0001f680 Run Analysis", type="primary"):
+    if run_clicked:
         if not symbols:
             st.error("No symbols to analyze")
             return

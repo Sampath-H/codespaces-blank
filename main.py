@@ -682,18 +682,15 @@ def main():
     .stApp { background: #070d1a !important; }
     section[data-testid="stSidebar"] { background: #0a0f1e !important; border-right: 1px solid rgba(255,255,255,0.06) !important; }
 
-    /* ─── Sidebar nav radio ─────────────────────────────────────── */
+    /* ─── Radio buttons (sidebar nav + scanner options) ─────────── */
     div[data-testid="stRadio"] label {
-        font-size: 0.92rem !important;
-        color: #7a8fb5 !important;
-        padding: 0.45rem 0.75rem !important;
+        font-size: 0.9rem !important;
+        color: #8899bb !important;
+        padding: 0.4rem 0.6rem !important;
         border-radius: 8px !important;
         transition: background 0.15s, color 0.15s !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 0.5rem !important;
-        margin: 1px 0 !important;
         cursor: pointer !important;
+        margin: 1px 0 !important;
     }
     div[data-testid="stRadio"] label:hover {
         background: rgba(255,255,255,0.06) !important;
@@ -701,16 +698,15 @@ def main():
     }
     div[data-testid="stRadio"] label:has(input:checked) {
         color: #ffffff !important;
-        background: rgba(59,130,246,0.1) !important;
         font-weight: 600 !important;
     }
-    /* Hide the radio circle input */
-    div[data-testid="stRadio"] input[type="radio"] {
-        display: none !important;
+    /* Style the radio circle */
+    div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {
+        border-color: #3b82f6 !important;
     }
-    /* Remove the custom radio circle div */
-    div[data-testid="stRadio"] label > div:first-child {
-        display: none !important;
+    div[data-testid="stRadio"] [aria-checked="true"] > div:first-child {
+        background-color: #3b82f6 !important;
+        border-color: #3b82f6 !important;
     }
 
     /* ─── Sidebar run button ──────────────────────── */
