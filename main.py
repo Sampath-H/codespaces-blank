@@ -740,17 +740,27 @@ def main():
         box-shadow: none !important;
     }
 
-    /* ─── Page header banner ──────────────────────── */
+    /* ─── Page header — compact top-left ─────────── */
     .header-container {
-        background: linear-gradient(135deg, #0a1628 0%, #0f2545 50%, #071020 100%);
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 16px;
-        padding: 2rem 2.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.5rem 0 0.8rem;
+        margin-bottom: 0.6rem;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
     }
-    .header-container h1 { color: #fff !important; font-weight: 900 !important; margin: 0 !important; font-size: 2rem !important; }
-    .header-container p  { color: #6b8fb5 !important; margin: 0.3rem 0 0 !important; font-size: 0.9rem !important; }
+    .header-container h1 {
+        color: #fff !important;
+        font-weight: 800 !important;
+        margin: 0 !important;
+        font-size: 1.35rem !important;
+        line-height: 1.2 !important;
+    }
+    .header-container p {
+        color: #5a7a9a !important;
+        margin: 0 !important;
+        font-size: 0.78rem !important;
+    }
 
     /* ─── Metric cards ────────────────────────────── */
     .metric-card {
@@ -800,6 +810,31 @@ def main():
     div[data-testid="stTextInput"] input:focus {
         border-color: #3b82f6 !important;
         box-shadow: 0 0 0 3px rgba(59,130,246,0.15) !important;
+    }
+
+    /* ─── Hide "keyboard_double_arrow_left" icon text ────────────── */
+    /* Streamlit uses material-icons font; text shows if font fails to load */
+    [data-testid="collapsedControl"],
+    [data-testid="expandedControl"],
+    button[title="Close sidebar"],
+    button[title="Open sidebar"] {
+        font-size: 0 !important;
+        overflow: hidden !important;
+    }
+    [data-testid="collapsedControl"] *,
+    [data-testid="expandedControl"] * {
+        font-size: 0 !important;
+    }
+    /* Restore the icon itself (SVG/icon content) */
+    [data-testid="collapsedControl"] svg,
+    [data-testid="expandedControl"] svg {
+        font-size: initial !important;
+        display: block !important;
+    }
+    /* Hide Navigation radio label */
+    section[data-testid="stSidebar"] .stRadio > label,
+    section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] {
+        display: none !important;
     }
 
     /* ─── Scrollbar ───────────────────────────────── */
@@ -857,8 +892,10 @@ def main():
     h_title, h_sub = PAGE_HEADERS[page_key]
     st.markdown(f"""
     <div class="header-container">
-        <h1>{h_title}</h1>
-        <p>{h_sub}</p>
+        <div>
+            <h1>{h_title}</h1>
+            <p>{h_sub}</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 

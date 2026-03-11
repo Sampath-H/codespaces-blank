@@ -613,7 +613,7 @@ def display_scanner_page():
     )
 
     analysis_method = "basic"
-    if analysis_type in ["Current Signals with Cluster Analysis", "Both"]:
+    if analysis_type == "Current Signals with Cluster Analysis":
         analysis_method = "cluster"
 
     # ---- Run analysis button ----
@@ -651,7 +651,7 @@ def display_scanner_page():
             return
 
         # ===== Current Signals scan (save to session_state) =====
-        if analysis_type in ["Current Signals", "Current Signals with Cluster Analysis", "Both"]:
+        if analysis_type in ["Current Signals", "Current Signals with Cluster Analysis"]:
             method = "cluster" if analysis_type in ["Current Signals with Cluster Analysis", "Both"] else "basic"
             progress_bar = st.progress(0, text="Scanning...")
             results = fetch_data(symbols, progress_bar, method)
@@ -664,7 +664,7 @@ def display_scanner_page():
                 return
 
         # ===== Daily Breakout scan (save to session_state) =====
-        if analysis_type in ["Daily Breakout Tracking", "Both"]:
+        if analysis_type in ["Daily Breakout Tracking"]:
             progress_bar = st.progress(0, text="Tracking daily breakouts...")
             daily_results = fetch_daily_breakout_data(symbols, progress_bar)
             progress_bar.empty()
@@ -680,21 +680,27 @@ def display_scanner_page():
 
     # ── Current Signals display ──────────────────────────────────────────────
     if 'scanner_df' in st.session_state and analysis_type in [
-        "Current Signals", "Current Signals with Cluster Analysis", "Both"
+        "Current Signals", "Current Signals with Cluster Analysis"
     ]:
         df              = st.session_state['scanner_df']
         analysis_method = st.session_state.get('scanner_method', 'basic')
 
         if analysis_method == "cluster":
-            with st.expander("\U0001f4cb Signal Meanings"):
-                st.markdown("""
-- **Bullish Confirmed**: Price above Friday high, staying strong
-- **Bearish Confirmed**: Price below Friday low, staying weak
-- **Breakout Done but Returns**: Broke out above Friday high, now back in cluster
-- **Breakdown Done but Returns**: Broke down below Friday low, now back in cluster
-- **Post-Movement Consolidation**: Had big move, now ranging
-- **Neutral**: No breakout/breakdown yet
-                """)
+            st.markdown("""
+            <details style="background:#0d1628;border:1px solid rgba(255,255,255,0.08);
+            border-radius:10px;padding:0.6rem 1rem;margin-bottom:0.8rem;cursor:pointer;">
+            <summary style="color:#8899bb;font-size:0.85rem;font-weight:600;list-style:none;">
+            📋 Signal Meanings &nbsp;<span style="font-size:0.7rem;color:#5a7a9a;">(click to expand)</span>
+            </summary>
+            <div style="margin-top:0.6rem;font-size:0.82rem;color:#a0b4c8;line-height:1.8;">
+            <b style="color:#34d399;">Bullish Confirmed</b> — Price above Friday high, staying strong<br>
+            <b style="color:#f87171;">Bearish Confirmed</b> — Price below Friday low, staying weak<br>
+            <b style="color:#38bdf8;">Breakout Done but Returns</b> — Broke above Friday high, now back in cluster<br>
+            <b style="color:#f87171;">Breakdown Done but Returns</b> — Broke below Friday low, now back in cluster<br>
+            <b style="color:#fbbf24;">Post-Movement Consolidation</b> — Had big move, now ranging<br>
+            <b style="color:#8899bb;">Neutral</b> — No breakout/breakdown yet
+            </div></details>
+            """, unsafe_allow_html=True)
 
         # Header + Search
         search_term = st.text_input("", placeholder="🔍  Search by stock symbol...", key="scanner_search",
@@ -906,11 +912,11 @@ def display_scanner_page():
             filename = f"screener_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
             st.markdown(create_download_link(df_filtered, filename), unsafe_allow_html=True)
 
-    elif analysis_type in ["Current Signals", "Current Signals with Cluster Analysis", "Both"]:
+    elif analysis_type in ["Current Signals", "Current Signals with Cluster Analysis"]:
         st.info("\U0001f448 Click **Run Analysis** in the sidebar to start scanning.")
 
     # ── Daily Breakout display ───────────────────────────────────────────────
-    if 'scanner_daily_df' in st.session_state and analysis_type in ["Daily Breakout Tracking", "Both"]:
+    if 'scanner_daily_df' in st.session_state and analysis_type in ["Daily Breakout Tracking"]:
         st.markdown("---")
         st.subheader("\U0001f4c8 Daily Breakout Tracking")
         df_daily = st.session_state['scanner_daily_df']
