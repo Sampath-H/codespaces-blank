@@ -682,31 +682,40 @@ def main():
     .stApp { background: #070d1a !important; }
     section[data-testid="stSidebar"] { background: #0a0f1e !important; border-right: 1px solid rgba(255,255,255,0.06) !important; }
 
-    /* ─── Radio buttons (sidebar nav + scanner options) ─────────── */
-    div[data-testid="stRadio"] label {
-        font-size: 0.9rem !important;
-        color: #8899bb !important;
-        padding: 0.4rem 0.6rem !important;
-        border-radius: 8px !important;
+    /* ─── Sidebar Nav radio — styled as list items ───────────────── */
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] > div {
+        gap: 0 !important;
+        padding: 0.2rem 0 !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] label {
+        display: flex !important;
+        align-items: center !important;
+        gap: 0.65rem !important;
+        font-size: 0.92rem !important;
+        color: #7a8fb5 !important;
+        padding: 0.52rem 0.9rem !important;
+        border-radius: 10px !important;
+        margin: 1px 0 !important;
         transition: background 0.15s, color 0.15s !important;
         cursor: pointer !important;
-        margin: 1px 0 !important;
+        width: 100% !important;
     }
-    div[data-testid="stRadio"] label:hover {
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover {
         background: rgba(255,255,255,0.06) !important;
-        color: #e0e8ff !important;
+        color: #c8d8f0 !important;
     }
-    div[data-testid="stRadio"] label:has(input:checked) {
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) {
+        background: rgba(59,130,246,0.14) !important;
         color: #ffffff !important;
         font-weight: 600 !important;
     }
-    /* Style the radio circle */
-    div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {
-        border-color: #3b82f6 !important;
+    /* Hide the radio circle for nav items */
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div:first-child {
+        display: none !important;
     }
-    div[data-testid="stRadio"] [aria-checked="true"] > div:first-child {
-        background-color: #3b82f6 !important;
-        border-color: #3b82f6 !important;
+    /* Radio circles inside scanner sidebar (not nav) */
+    section[data-testid="stSidebar"] div[data-testid="stRadio"][data-scanner="1"] label > div:first-child {
+        display: flex !important;
     }
 
     /* ─── Sidebar run button ──────────────────────── */
@@ -848,24 +857,21 @@ def main():
 
     # Sidebar Navigation
     with st.sidebar:
-        # Logo
         st.markdown("""
-        <div style="padding:0.8rem 0 0.5rem;">
-          <div style="font-size:1.5rem;font-weight:800;color:#fff;letter-spacing:-0.03em;">
+        <div style="padding:0.4rem 0 0.6rem;">
+          <div style="font-size:1.38rem;font-weight:800;color:#fff;letter-spacing:-0.02em;">
             📊 AlgoTrade <span style="color:#f59e0b;">Pro</span>
           </div>
-          <div style="font-size:0.68rem;color:#5a7a9a;letter-spacing:0.12em;
-               text-transform:uppercase;margin-top:2px;">
+          <div style="font-size:0.6rem;color:#3a5470;letter-spacing:0.15em;
+               text-transform:uppercase;margin-top:3px;">
             Algorithmic Trading Platform
           </div>
         </div>
+        <hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:0.2rem 0 0;">
+        <div style="font-size:0.58rem;font-weight:800;color:#3a5470;
+             letter-spacing:0.2em;text-transform:uppercase;
+             padding:0.75rem 0.15rem 0.25rem;">Navigation</div>
         """, unsafe_allow_html=True)
-
-        # Search bar
-        st.text_input("", placeholder="🔍  Search...",
-                      key="sidebar_search", label_visibility="collapsed")
-
-        st.markdown('<hr style="border:none;border-top:1px solid #1e2a42;margin:0.4rem 0 0.2rem;">', unsafe_allow_html=True)
 
         page = st.radio(
             "Navigation",
@@ -873,7 +879,7 @@ def main():
              "📐  Strategies", "📈  Backtest", "📋  Reports", "⚙️  Settings"],
             label_visibility="collapsed"
         )
-        st.markdown('<hr style="border:none;border-top:1px solid #1e2a42;margin:0.2rem 0;">', unsafe_allow_html=True)
+        st.markdown('<hr style="border:none;border-top:1px solid rgba(255,255,255,0.06);margin:0.4rem 0 0;">', unsafe_allow_html=True)
 
 
 
@@ -937,7 +943,10 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-        if st.button("🚪  Logout", use_container_width=True, key="sidebar_logout"):
+        st.markdown("""
+        <hr style="border:none;border-top:1px solid #1a2540;margin:0.5rem 0 0.2rem;">
+        """, unsafe_allow_html=True)
+        if st.button("⏻  Log Out", use_container_width=True, key="sidebar_logout"):
             st.session_state.clear()
             safe_rerun()
 

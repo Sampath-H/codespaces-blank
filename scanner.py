@@ -513,117 +513,143 @@ def display_scanner_page():
                 return df[col].dropna().tolist()
         return None
 
-    # CSS for the scanner sidebar panels
+    # ── Complete sidebar CSS ──
     st.sidebar.markdown("""
     <style>
-    /* ── Scanner sidebar custom styles ── */
-    section[data-testid="stSidebar"] { overflow-y: auto; }
-
-    /* Section headers */
-    .sc-section {
-        font-size: 0.68rem; font-weight: 700; color: #5a7a9a;
-        letter-spacing: 0.14em; text-transform: uppercase;
-        padding: 0.9rem 0 0.4rem; display: flex; align-items: center; gap: 0.5rem;
+    /* ── Sidebar background ── */
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 0.5rem !important;
     }
 
-    /* Universe item buttons */
-    div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button {
+    /* ── Section label headers ── */
+    .sc-section {
+        font-size: 0.6rem; font-weight: 800; color: #3a5a7a;
+        letter-spacing: 0.2em; text-transform: uppercase;
+        padding: 1.1rem 0.2rem 0.4rem;
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    /* ── Universe list item buttons ── */
+    .univ-wrap { margin: 2px 0; }
+    .univ-wrap button {
         background: transparent !important;
         border: none !important;
-        color: #8899bb !important;
-        text-align: left !important;
-        padding: 0.55rem 0.8rem !important;
         border-radius: 10px !important;
+        color: #8099bb !important;
         font-size: 0.92rem !important;
         font-weight: 500 !important;
+        padding: 0.62rem 0.9rem !important;
+        text-align: left !important;
         width: 100% !important;
-        transition: background 0.15s !important;
+        justify-content: flex-start !important;
+        transition: background 0.15s, color 0.15s !important;
     }
-    div[data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button:hover {
-        background: rgba(255,255,255,0.06) !important;
-        color: #ffffff !important;
+    .univ-wrap button:hover {
+        background: rgba(255,255,255,0.07) !important;
+        color: #ddeeff !important;
     }
-
-    /* Active universe item */
     .univ-active button {
-        background: rgba(59,130,246,0.15) !important;
+        background: rgba(30,60,120,0.55) !important;
         color: #ffffff !important;
         font-weight: 600 !important;
     }
 
-    /* Scanner type radio */
+    /* ── Divider ── */
+    .sc-divider {
+        border: none; border-top: 1px solid rgba(255,255,255,0.06);
+        margin: 0.3rem 0;
+    }
+
+    /* ── Radio — scanner type ── */
+    div[data-testid="stSidebar"] div[data-testid="stRadio"] {
+        gap: 0 !important;
+    }
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label {
-        font-size: 0.9rem !important;
-        color: #8899bb !important;
-        padding: 0.42rem 0.3rem !important;
+        font-size: 0.91rem !important;
+        color: #7a90b5 !important;
+        padding: 0.45rem 0.3rem !important;
         cursor: pointer !important;
+        transition: color 0.15s !important;
+        align-items: center !important;
+    }
+    div[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover {
+        color: #d0e4ff !important;
     }
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) {
         color: #ffffff !important;
         font-weight: 600 !important;
     }
+    /* Radio circle */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {
-        border-color: #3b4a66 !important; width:16px !important; height:16px !important;
+        border-color: #2d4060 !important;
+        background: transparent !important;
+        width: 17px !important; height: 17px !important;
+        flex-shrink: 0 !important;
     }
     div[data-testid="stSidebar"] div[data-testid="stRadio"] [aria-checked="true"] > div:first-child {
-        background: #e05252 !important; border-color: #e05252 !important;
+        background: #e05252 !important;
+        border-color: #e05252 !important;
     }
 
-    /* Run Analysis button */
-    div[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"] {
-        background: linear-gradient(135deg, #e53e3e, #c53030) !important;
-        border: none !important; color: #fff !important;
-        font-size: 1rem !important; font-weight: 700 !important;
-        border-radius: 12px !important; height: 52px !important;
-        letter-spacing: 0.04em !important;
-        box-shadow: 0 4px 20px rgba(229,62,62,0.4) !important;
+    /* ── File uploader ── */
+    div[data-testid="stSidebar"] [data-testid="stFileUploader"] section {
+        border: 1.5px dashed rgba(255,255,255,0.1) !important;
+        border-radius: 10px !important;
+        padding: 0.8rem !important;
+        background: rgba(255,255,255,0.02) !important;
     }
-    div[data-testid="stSidebar"] div[data-testid="stButton"] > button[kind="primary"]:hover {
-        box-shadow: 0 6px 28px rgba(229,62,62,0.6) !important;
+    div[data-testid="stSidebar"] [data-testid="stFileUploader"] span {
+        font-size: 0.8rem !important;
+        color: #7a90b5 !important;
+    }
+    div[data-testid="stSidebar"] [data-testid="stFileUploader"] small {
+        font-size: 0.72rem !important;
+        color: #4a6080 !important;
+    }
+
+    /* ── Run Analysis button ── */
+    div[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="primary"]) button {
+        background: linear-gradient(135deg,#e53e3e 0%,#c53030 100%) !important;
+        border: none !important; color: #fff !important;
+        font-size: 1rem !important; font-weight: 800 !important;
+        letter-spacing: 0.07em !important; text-transform: uppercase !important;
+        border-radius: 12px !important; height: 54px !important;
+        box-shadow: 0 4px 22px rgba(229,62,62,0.4) !important;
+        transition: box-shadow 0.2s, transform 0.15s !important;
+    }
+    div[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="primary"]) button:hover {
+        box-shadow: 0 8px 32px rgba(229,62,62,0.65) !important;
         transform: translateY(-2px) !important;
     }
-
-    /* File uploader compact */
-    div[data-testid="stSidebar"] div[data-testid="stFileUploader"] {
-        border: 1px dashed rgba(255,255,255,0.15) !important;
-        border-radius: 10px !important;
-        padding: 0.5rem !important;
-    }
-    div[data-testid="stSidebar"] div[data-testid="stFileUploader"] span { font-size:0.8rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
-    # ── Stock Universe section ──
-    st.sidebar.markdown('<div class="sc-section">📂 &nbsp;Stock Universe</div>', unsafe_allow_html=True)
-
+    # ── Init state ──
     if 'scanner_universe' not in st.session_state:
         st.session_state['scanner_universe'] = 'Nifty 500'
 
-    u_col1, u_col2 = st.sidebar.columns(2)
-    nifty_active = st.session_state['scanner_universe'] == 'Nifty 500'
-    fo_active    = st.session_state['scanner_universe'] == 'F&O Stocks'
+    stock_universe = st.session_state['scanner_universe']
+    nifty_active   = stock_universe == 'Nifty 500'
+    fo_active      = stock_universe == 'F&O Stocks'
 
-    with u_col1:
-        if nifty_active:
-            st.markdown('<div class="univ-active">', unsafe_allow_html=True)
-        if st.button("🗃️  Nifty 500", key="btn_nifty", use_container_width=True):
+    # ── Stock Universe ──
+    st.sidebar.markdown('<div class="sc-section">📂 &nbsp;Stock Universe</div>', unsafe_allow_html=True)
+    with st.sidebar:
+        st.markdown(f'<div class="univ-wrap {("univ-active" if nifty_active else "")}">', unsafe_allow_html=True)
+        if st.button("🗃️   Nifty 500", key="btn_nifty", use_container_width=True):
             st.session_state['scanner_universe'] = 'Nifty 500'
             st.rerun()
-        if nifty_active:
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    with u_col2:
-        if fo_active:
-            st.markdown('<div class="univ-active">', unsafe_allow_html=True)
-        if st.button("📊  F&O Stocks", key="btn_fo", use_container_width=True):
+        st.markdown(f'<div class="univ-wrap {("univ-active" if fo_active else "")}">', unsafe_allow_html=True)
+        if st.button("📊   F&O Stocks", key="btn_fo", use_container_width=True):
             st.session_state['scanner_universe'] = 'F&O Stocks'
             st.rerun()
-        if fo_active:
-            st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    stock_universe = st.session_state['scanner_universe']
+    st.sidebar.markdown('<hr class="sc-divider">', unsafe_allow_html=True)
 
-    # ── Scanner Type section ──
+    # ── Configure Scanner ──
     st.sidebar.markdown('<div class="sc-section">🔍 &nbsp;Configure Scanner</div>', unsafe_allow_html=True)
     analysis_type = st.sidebar.radio(
         "Scanner Type",
@@ -635,7 +661,9 @@ def display_scanner_page():
         key="scanner_type"
     )
 
-    # ── Data Upload section ──
+    st.sidebar.markdown('<hr class="sc-divider">', unsafe_allow_html=True)
+
+    # ── Data Upload ──
     st.sidebar.markdown('<div class="sc-section">⬆️ &nbsp;Data Upload</div>', unsafe_allow_html=True)
     uploaded_file = st.sidebar.file_uploader(
         "Upload CSV",
@@ -645,10 +673,16 @@ def display_scanner_page():
         label_visibility="collapsed"
     )
 
-    # ── Run Analysis button ──
-    st.sidebar.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
+    # ── Run Analysis ──
+    st.sidebar.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
     run_clicked = st.sidebar.button("🚀  RUN ANALYSIS", type="primary",
                                     use_container_width=True, key="run_analysis_btn")
+    if 'last_run_time' in st.session_state:
+        st.sidebar.markdown(
+            f'<div style="text-align:center;font-size:0.7rem;color:#4a6080;margin-top:0.3rem;">'
+            f'Last run: {st.session_state["last_run_time"]}</div>',
+            unsafe_allow_html=True
+        )
 
     # ── Info bar (main area) ──
     last_friday = get_last_friday()
@@ -716,6 +750,8 @@ def display_scanner_page():
         # Reset filter on fresh scan
         st.session_state['scanner_filter'] = 'All'
         st.session_state.pop('scanner_df', None)
+        from datetime import datetime as _dt
+        st.session_state['last_run_time'] = _dt.now().strftime('%b %d  %H:%M')
 
         # ===== Monthly Marubozu Open Scan =====
         if analysis_type == "Monthly Marubozu Open Scan":
