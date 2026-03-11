@@ -908,58 +908,48 @@ def display_scanner_page():
                 # Base button style for ALL tile rows (3-col and 4-col)
                 css += (
                     "div[data-testid='stHorizontalBlock']:has([class*='tile-row']) {"
-                    "align-items: stretch!important;}"
+                    "align-items: flex-start!important;}"
                     "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
                     " div[data-testid='stColumn'] {"
                     "padding:0!important; margin:0!important;}"
                     "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
                     " div[data-testid='stColumn'] button{"
-                    "border-radius:16px!important;"
-                    "height:115px!important;min-height:115px!important;max-height:115px!important;"
+                    "background:transparent!important;"
+                    "border:none!important;"
                     "width:100%!important;font-weight:900!important;"
                     "font-size:2.5rem!important;line-height:1.15!important;"
                     "margin:0!important; white-space:pre-line!important;"
-                    "padding:0.8rem 0.3rem!important;"
+                    "padding:0.4rem 0!important;"
                     "letter-spacing:-0.03em!important;"
                     "display:flex!important;flex-direction:column!important;"
-                    "align-items:center!important;justify-content:center!important;"
-                    "transition:transform 0.15s,box-shadow 0.15s!important;}"
+                    "align-items:center!important;justify-content:flex-start!important;"
+                    "transition:transform 0.15s, opacity 0.15s!important;}"
                     "div[data-testid='stHorizontalBlock']:has(.tile-row-1)"
                     " div[data-testid='stColumn'] button{"
                     "font-size:2rem!important;}"
                     "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
                     " div[data-testid='stColumn'] button:hover{"
-                    "transform:translateY(-4px)!important;}"
+                    "transform:translateY(-2px)!important; opacity:0.8!important;}"
                 )
 
                 for row_idx, row in enumerate(rows_cfg):
                     for col_idx, (key, num, bg, ba) in enumerate(row):
                         is_act = (act == key)
-                        _bg    = '#1e0d00' if is_act else bg
-                        _bd    = ba if is_act else 'rgba(255,255,255,0.08)'
-                        _glow  = num + '55' if is_act else num + '18'
+                        _color = num if is_act else 'rgba(255,255,255,0.6)'
                         css += (
                             # anchor id = tile-r0 or tile-r1, scoped by row
                             "div[data-testid='stHorizontalBlock']:has(.tile-row-" + str(row_idx) + ")"
                             " div[data-testid='stColumn']:nth-child(" + str(col_idx+1) + ") button{"
-                            "background:" + _bg + "!important;"
-                            "border:2px solid " + _bd + "!important;"
-                            "color:" + num + "!important;"
-                            "box-shadow:0 4px 24px " + _glow + "!important;}"
+                            "color:" + _color + "!important;}"
                         )
                 # basic mode (1 row only, 3 tiles)
                 for col_idx, (key, num, bg, ba) in enumerate(basic_cfg[0]):
                     is_act = (act == key)
-                    _bg    = '#1e0d00' if is_act else bg
-                    _bd    = ba if is_act else 'rgba(255,255,255,0.08)'
-                    _glow  = num + '55' if is_act else num + '18'
+                    _color = num if is_act else 'rgba(255,255,255,0.6)'
                     css += (
                         "div[data-testid='stHorizontalBlock']:has(.tile-row-basic)"
                         " div[data-testid='stColumn']:nth-child(" + str(col_idx+1) + ") button{"
-                        "background:" + _bg + "!important;"
-                        "border:2px solid " + _bd + "!important;"
-                        "color:" + num + "!important;"
-                        "box-shadow:0 4px 24px " + _glow + "!important;}"
+                        "color:" + _color + "!important;}"
                     )
                 css += "</style>"
                 return css
