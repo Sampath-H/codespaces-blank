@@ -541,35 +541,43 @@ def display_scanner_page():
         margin: 0.3rem 0;
     }
 
-    /* ── Radio — scanner type ── */
+    /* ── Radio — all sidebar radios ── */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] {
         gap: 0 !important;
     }
+    /* Unselected label — dimmed but readable */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label {
-        font-size: 0.91rem !important;
-        color: #7a90b5 !important;
-        padding: 0.45rem 0.3rem !important;
+        font-size: 0.92rem !important;
+        color: #6a80a0 !important;
+        padding: 0.45rem 0.4rem !important;
+        border-radius: 8px !important;
         cursor: pointer !important;
-        transition: color 0.15s !important;
+        transition: background 0.15s, color 0.15s !important;
         align-items: center !important;
     }
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover {
-        color: #d0e4ff !important;
+        color: #c8dcf8 !important;
+        background: rgba(255,255,255,0.05) !important;
     }
+    /* Selected label — bright white with highlight */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) {
         color: #ffffff !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
+        background: rgba(59,130,246,0.15) !important;
+        border-radius: 8px !important;
     }
-    /* Radio circle */
+    /* Radio circle — unselected */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {
-        border-color: #2d4060 !important;
+        border-color: #3a5070 !important;
         background: transparent !important;
-        width: 17px !important; height: 17px !important;
+        width: 16px !important; height: 16px !important;
         flex-shrink: 0 !important;
     }
+    /* Radio circle — selected: bright red dot */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] [aria-checked="true"] > div:first-child {
-        background: #e05252 !important;
-        border-color: #e05252 !important;
+        background: #ff4444 !important;
+        border-color: #ff4444 !important;
+        box-shadow: 0 0 6px rgba(255,68,68,0.6) !important;
     }
 
     /* ── File uploader ── */
@@ -590,17 +598,19 @@ def display_scanner_page():
 
     /* ── Run Analysis button ── */
     div[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="primary"]) button {
-        background: linear-gradient(135deg,#e53e3e 0%,#c53030 100%) !important;
+        background: linear-gradient(135deg, #ff4444 0%, #e02020 100%) !important;
         border: none !important; color: #fff !important;
         font-size: 1rem !important; font-weight: 800 !important;
-        letter-spacing: 0.07em !important; text-transform: uppercase !important;
+        letter-spacing: 0.08em !important; text-transform: uppercase !important;
         border-radius: 12px !important; height: 54px !important;
-        box-shadow: 0 4px 22px rgba(229,62,62,0.4) !important;
+        box-shadow: 0 4px 28px rgba(255,60,60,0.55) !important;
         transition: box-shadow 0.2s, transform 0.15s !important;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
     }
     div[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="primary"]) button:hover {
-        box-shadow: 0 8px 32px rgba(229,62,62,0.65) !important;
+        box-shadow: 0 8px 36px rgba(255,60,60,0.75) !important;
         transform: translateY(-2px) !important;
+        background: linear-gradient(135deg, #ff5555 0%, #e53030 100%) !important;
     }
     </style>
     """, unsafe_allow_html=True)
