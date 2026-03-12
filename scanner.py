@@ -732,7 +732,7 @@ def display_scanner_page():
          "Monthly Marubozu Open Scan",
          "Fibonacci Level Scan"],
         label_visibility="collapsed",
-        key="scanner_type"
+        key="scanner_type_v2"
     )
 
     # Tolerance slider — only shown for Fib scan
