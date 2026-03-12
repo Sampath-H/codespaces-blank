@@ -1383,34 +1383,29 @@ def display_scanner_page():
 
             # ── Per-stock chart viewer ────────────────────────────────────
             st.markdown(
-                '<div style="font-size:0.78rem;color:#5a7a9a;margin:0.5rem 0 0.3rem;">'
-                '📈 Click any stock below to view its chart with Fibonacci levels</div>',
+                '<div style="background:#0a1628;border:1px solid rgba(59,130,246,0.25);'
+                'border-radius:10px;padding:0.7rem 1rem;margin:1rem 0 0.5rem;">'
+                '<span style="color:#38bdf8;font-weight:700;font-size:0.88rem;">📈 Chart Viewer</span>'
+                '<span style="color:#5a7a9a;font-size:0.78rem;margin-left:0.8rem;">'
+                'Select a stock and period to view candlestick chart with Fib levels</span></div>',
                 unsafe_allow_html=True
             )
 
-            # Period selector
-            chart_period = st.select_slider(
-                "Chart period", options=["1mo", "3mo", "6mo", "1y"],
-                value="3mo", key="fib_chart_period", label_visibility="collapsed"
-            )
-
-            # Stock selector buttons — up to 8 per row
             stocks_list = df_show['Stock'].tolist()
-            btn_cols = st.columns(min(len(stocks_list), 8))
-            for idx_b, stk in enumerate(stocks_list[:8]):
-                if btn_cols[idx_b % 8].button(stk, key=f"fib_btn_{stk}", use_container_width=True):
-                    st.session_state['fib_chart_stock'] = stk
-            if len(stocks_list) > 8:
-                btn_cols2 = st.columns(min(len(stocks_list)-8, 8))
-                for idx_b, stk in enumerate(stocks_list[8:16]):
-                    if btn_cols2[idx_b % 8].button(stk, key=f"fib_btn_{stk}", use_container_width=True):
-                        st.session_state['fib_chart_stock'] = stk
+            cv1, cv2 = st.columns([3, 1])
+            with cv1:
+                sel = st.selectbox(
+                    "Select stock", options=["— select —"] + stocks_list,
+                    key="fib_chart_stock", label_visibility="collapsed"
+                )
+            with cv2:
+                chart_period = st.selectbox(
+                    "Period", options=["1mo", "3mo", "6mo", "1y"],
+                    index=1, key="fib_chart_period", label_visibility="collapsed"
+                )
 
-            # Draw chart for selected stock
-            sel = st.session_state.get('fib_chart_stock')
-            if sel and sel in df_show['Stock'].values:
+            if sel and sel != "— select —" and sel in df_show['Stock'].values:
                 row = df_show[df_show['Stock'] == sel].iloc[0]
-                # Parse fib_low / fib_high from "Fib Range" col e.g. "377 → 610"
                 try:
                     parts = str(row['Fib Range']).split('→')
                     f_low  = float(parts[0].strip())
