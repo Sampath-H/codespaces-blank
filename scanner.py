@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import io
 import base64
 import os
-import plotly.graph_objects as go
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +598,7 @@ def _draw_fib_chart(symbol, fib_low, fib_high, period="3mo"):
       - Absolute nearest Fib line
     """
     try:
+        import plotly.graph_objects as go
         df = yf.download(f"{symbol}.NS", period=period, interval="1d",
                          auto_adjust=True, progress=False)
         if df is None or len(df) == 0:
