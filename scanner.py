@@ -362,16 +362,21 @@ FIB_LEVELS = [
     1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393
 ]
 
-def find_nearest_fib(price):
-    """Return (nearest_fib, pct_distance) for a given price."""
-    nearest  = min(FIB_LEVELS, key=lambda f: abs(f - price))
-    dist_pct = abs(price - nearest) / nearest * 100
-    return nearest, round(dist_pct, 2)
+# Retracement ratios to check between consecutive Fib numbers
+FIB_RATIOS = [0.236, 0.382, 0.500, 0.618, 0.786]
+
+def _pct(price, level):
+    """% distance between price and a level."""
+    return round(abs(price - level) / level * 100, 2) if level else 999
 
 def scan_fibonacci_levels(symbols, tolerance_pct=1.5, progress_bar=None):
     """
-    Return stocks whose current price is within tolerance_pct% of any
-    Fibonacci number in FIB_LEVELS, sorted by proximity.
+    For each stock:
+      1. Check if LTP is within tolerance_pct% of any absolute Fib number.
+      2. Find the two bracketing Fib numbers (low=0, high=1) and calculate
+         retracement levels 0.236, 0.382, 0.500, 0.618, 0.786 between them.
+         Mark any retracement level the price is near.
+    Only rows that hit at least one condition are kept.
     """
     results = []
     total   = len(symbols)
@@ -391,39 +396,62 @@ def scan_fibonacci_levels(symbols, tolerance_pct=1.5, progress_bar=None):
             prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else ltp
             chng_pct   = round((ltp - prev_close) / prev_close * 100, 2) if prev_close else 0
 
-            nearest_fib, dist_pct = find_nearest_fib(ltp)
-            if dist_pct > tolerance_pct:
-                continue
+            # ── 1. Nearest absolute Fib number ──────────────────────────────
+            nearest_fib = min(FIB_LEVELS, key=lambda f: abs(f - ltp))
+            dist_fib    = _pct(ltp, nearest_fib)
+            near_fib    = dist_fib <= tolerance_pct   # bool
 
+            # ── 2. Bracketing Fib numbers (support / resistance) ─────────────
             below = [f for f in FIB_LEVELS if f <= ltp]
             above = [f for f in FIB_LEVELS if f >  ltp]
-            fib_sup = max(below) if below else FIB_LEVELS[0]
-            fib_res = min(above) if above else FIB_LEVELS[-1]
+            fib_low  = max(below) if below else FIB_LEVELS[0]
+            fib_high = min(above) if above else FIB_LEVELS[-1]
+            rng      = fib_high - fib_low            # range between bracket Fibs
 
-            if dist_pct <= 0.5:
-                zone = "🎯 Exactly At Fib"
-            elif ltp < nearest_fib:
-                zone = "⬆️ Approaching"
-            else:
-                zone = "⬇️ Just Above"
+            # ── 3. Retracement levels between brackets ───────────────────────
+            ret = {}          # ratio -> actual price level
+            near_ret = {}     # ratio -> (level, dist%) if near, else None
+            for ratio in FIB_RATIOS:
+                level = round(fib_low + ratio * rng, 2)
+                ret[ratio] = level
+                d = _pct(ltp, level)
+                near_ret[ratio] = (level, d) if d <= tolerance_pct else None
 
-            results.append({
-                'Stock':          symbol.replace('.NS', ''),
-                'LTP':            round(ltp, 2),
-                'Nearest Fib':    nearest_fib,
-                'Distance %':     dist_pct,
-                'Zone':           zone,
-                'Fib Support':    fib_sup,
-                'Fib Resistance': fib_res,
-                'Change %':       chng_pct,
-            })
+            # ── Skip row if nothing is near ──────────────────────────────────
+            if not near_fib and not any(near_ret.values()):
+                continue
+
+            # ── Build row ────────────────────────────────────────────────────
+            def fmt_ret(ratio):
+                """Return 'level (dist%)' string if near, else '-'."""
+                v = near_ret[ratio]
+                return f"{v[0]:.2f}  ({v[1]:.2f}%)" if v else "-"
+
+            row = {
+                'Stock':      symbol.replace('.NS', ''),
+                'LTP':        f"{ltp:.2f}",
+                'Change %':   chng_pct,
+                'Near Fib #': f"{nearest_fib}  ({dist_fib:.2f}%)" if near_fib else "-",
+                'Fib Range':  f"{fib_low} → {fib_high}",
+                '0.236':      fmt_ret(0.236),
+                '0.382':      fmt_ret(0.382),
+                '0.500':      fmt_ret(0.500),
+                '0.618':      fmt_ret(0.618),
+                '0.786':      fmt_ret(0.786),
+                # internal sort key
+                '_min_dist':  min([dist_fib] + [v[1] for v in near_ret.values() if v]),
+            }
+            results.append(row)
+
         except Exception:
             continue
 
     if not results:
         return pd.DataFrame()
+
     df = pd.DataFrame(results)
-    return df.sort_values('Distance %').reset_index(drop=True)
+    df = df.sort_values('_min_dist').drop(columns=['_min_dist']).reset_index(drop=True)
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -1195,24 +1223,29 @@ def display_scanner_page():
         df_fib = st.session_state['scanner_fib_df']
         tol    = st.session_state.get('fib_tolerance_used', 1.5)
         if not df_fib.empty:
-            total_hits  = len(df_fib)
-            exact_hits  = len(df_fib[df_fib['Distance %'] <= 0.5])
-            approaching = len(df_fib[df_fib['Zone'].str.contains('Approaching', na=False)])
-            just_above  = len(df_fib[df_fib['Zone'].str.contains('Just Above',  na=False)])
+            total_hits = len(df_fib)
 
-            c1, c2, c3, c4 = st.columns(4)
+            # Count hits per retracement column
+            def _has_hit(col): return len(df_fib[df_fib[col] != '-'])
+            n_fib   = _has_hit('Near Fib #')
+            n_236   = _has_hit('0.236')
+            n_618   = _has_hit('0.618')
+            n_786   = _has_hit('0.786')
+
+            c1, c2, c3, c4, c5 = st.columns(5)
             for col, label, val, clr in [
-                (c1, "Total Near Fib",  total_hits,  "#38bdf8"),
-                (c2, "Exactly At Fib",  exact_hits,  "#34d399"),
-                (c3, "Approaching Fib", approaching, "#fbbf24"),
-                (c4, "Just Above Fib",  just_above,  "#f87171"),
+                (c1, "Total Stocks",   total_hits, "#38bdf8"),
+                (c2, "Near Fib #",     n_fib,      "#34d399"),
+                (c3, "Near 0.236",     n_236,      "#fbbf24"),
+                (c4, "Near 0.618",     n_618,      "#fb923c"),
+                (c5, "Near 0.786",     n_786,      "#f87171"),
             ]:
                 col.markdown(
                     f'<div style="background:#0a1628;border:1.5px solid {clr}44;'
-                    f'border-radius:12px;padding:0.9rem;text-align:center;margin-bottom:0.6rem;">'
-                    f'<div style="font-size:2rem;font-weight:900;color:{clr};">{val}</div>'
-                    f'<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);'
-                    f'text-transform:uppercase;letter-spacing:0.1em;margin-top:0.2rem;">{label}</div>'
+                    f'border-radius:12px;padding:0.8rem;text-align:center;margin-bottom:0.6rem;">'
+                    f'<div style="font-size:1.8rem;font-weight:900;color:{clr};">{val}</div>'
+                    f'<div style="font-size:0.62rem;color:rgba(255,255,255,0.4);'
+                    f'text-transform:uppercase;letter-spacing:0.1em;margin-top:0.15rem;">{label}</div>'
                     f'</div>', unsafe_allow_html=True
                 )
 
@@ -1222,22 +1255,27 @@ def display_scanner_page():
                 f'border-radius:10px;padding:0.55rem 1.1rem;margin:0.4rem 0 0.8rem;'
                 f'font-size:0.82rem;color:#7a9fc4;">'
                 f'📐 <b>Tolerance:</b> ±{tol}% &nbsp;|&nbsp; '
-                f'🔢 <b>Fib levels checked:</b> 1 → 121,393 &nbsp;|&nbsp; '
-                f'📊 <b>Sorted by:</b> proximity to nearest Fib</div>',
+                f'🔢 <b>Fib Numbers:</b> 1→121393 &nbsp;|&nbsp; '
+                f'📊 <b>Retracement:</b> 0.236 / 0.382 / 0.500 / 0.618 / 0.786 between bracket Fibs &nbsp;|&nbsp; '
+                f'📈 <b>Sorted by closest hit</b></div>',
                 unsafe_allow_html=True
             )
 
-            # Fib level tags — which levels have most hits
-            fib_counts = df_fib.groupby('Nearest Fib').size().reset_index(name='n')
-            fib_counts = fib_counts.sort_values('n', ascending=False).head(8)
-            tags = " ".join([
-                f'<span style="background:rgba(56,189,248,0.12);color:#38bdf8;'
-                f'border-radius:6px;padding:0.15rem 0.55rem;font-size:0.78rem;margin:2px;">'
-                f'<b>{r["n"]}</b> × ₹{r["Nearest Fib"]}</span>'
-                for _, r in fib_counts.iterrows()
-            ])
-            st.markdown(f'<div style="margin-bottom:0.8rem;">{tags}</div>',
-                        unsafe_allow_html=True)
+            # How to read legend
+            st.markdown("""
+            <details style="background:#0d1628;border:1px solid rgba(255,255,255,0.07);
+            border-radius:8px;padding:0.5rem 1rem;margin-bottom:0.8rem;cursor:pointer;">
+            <summary style="color:#8899bb;font-size:0.82rem;font-weight:600;list-style:none;">
+            📋 How to read this table &nbsp;<span style="font-size:0.7rem;color:#5a7a9a;">(click)</span>
+            </summary>
+            <div style="margin-top:0.5rem;font-size:0.8rem;color:#a0b4c8;line-height:1.9;">
+            <b>Fib Range</b> — Two consecutive Fibonacci numbers that bracket the stock price (low → high)<br>
+            <b>Near Fib #</b> — Price is close to an absolute Fibonacci number. Shows: <i>fib_value (dist%)</i><br>
+            <b>0.236 / 0.382 / 0.500 / 0.618 / 0.786</b> — Retracement levels between the two bracket Fibs.<br>
+            &nbsp;&nbsp;&nbsp;Calculated as: <i>fib_low + ratio × (fib_high − fib_low)</i><br>
+            &nbsp;&nbsp;&nbsp;Shows: <i>price_level (dist%)</i> if price is near that level, else <b>—</b>
+            </div></details>
+            """, unsafe_allow_html=True)
 
             # Search
             fib_q = st.text_input("", placeholder="🔍  Search stock...",
@@ -1245,18 +1283,27 @@ def display_scanner_page():
             df_show = (df_fib[df_fib['Stock'].str.contains(fib_q.upper(), na=False)]
                        if fib_q else df_fib)
 
-            # Colour helpers
-            def _dist_color(v):
-                if v <= 0.5:  return 'color:#34d399;font-weight:700'
-                if v <= 1.0:  return 'color:#fbbf24;font-weight:600'
-                return 'color:#f87171'
+            # Colour helpers for retracement columns
+            def _ret_color(v):
+                """Green if hit (not '-'), grey if no hit."""
+                if isinstance(v, str) and v != '-':
+                    return 'color:#34d399;font-weight:600'
+                return 'color:#3a4a5a'
 
             def _chg_color(v):
-                return 'color:#34d399' if v > 0 else ('color:#f87171' if v < 0 else '')
+                try:
+                    return 'color:#34d399' if float(v) > 0 else 'color:#f87171'
+                except Exception:
+                    return ''
 
-            styled = (df_show.style
-                      .applymap(_dist_color, subset=['Distance %'])
-                      .applymap(_chg_color,  subset=['Change %']))
+            ret_cols = ['Near Fib #', '0.236', '0.382', '0.500', '0.618', '0.786']
+            styled = df_show.style
+            for rc in ret_cols:
+                if rc in df_show.columns:
+                    styled = styled.applymap(_ret_color, subset=[rc])
+            if 'Change %' in df_show.columns:
+                styled = styled.applymap(_chg_color, subset=['Change %'])
+
             st.dataframe(styled, use_container_width=True, hide_index=True)
 
             st.markdown(
