@@ -883,110 +883,32 @@ def display_scanner_page():
                 'Breakdown': cnt_breakdown if analysis_method == 'cluster' else 0,
             }
 
-            # ─── Tile grid: st.button with nth-child CSS scoped to anchor divs ───
-            # Strategy: inject markdown anchor BEFORE st.columns; use
-            #   div:has(#anchor) ~ [stHorizontalBlock] [stColumn]:nth-child(N) button
-            # to scope color CSS to only our tile rows.
-
-            def tile_css(act, tile_cfg, tile_counts):
-                rows_cfg = [
-                    [('All','#e2e8f0','#0f172a','#f59e0b'),
-                     ('Cluster','#38bdf8','#071828','#38bdf8'),
-                     ('Strong','#fbbf24','#130d00','#fbbf24')],
-                    [('Bullish','#34d399','#021a0e','#34d399'),
-                     ('Bearish','#f87171','#1a0404','#f87171'),
-                     ('Breakout','#34d399','#021a0e','#34d399'),
-                     ('Breakdown','#f87171','#1a0404','#f87171')],
-                ]
-                basic_cfg = [
-                    [('All','#e2e8f0','#0f172a','#f59e0b'),
-                     ('Bullish','#34d399','#021a0e','#34d399'),
-                     ('Bearish','#f87171','#1a0404','#f87171')],
-                ]
-
-                css = "<style>"
-                # Base button style for ALL tile rows (3-col and 4-col)
-                css += (
-                    "div[data-testid='stHorizontalBlock']:has([class*='tile-row']) {"
-                    "align-items: flex-start!important;}"
-                    "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
-                    " div[data-testid='stColumn'] {"
-                    "padding:0!important; margin:0!important;}"
-                    "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
-                    " div[data-testid='stColumn'] button{"
-                    "background:transparent!important;"
-                    "border:none!important;"
-                    "width:100%!important;font-weight:900!important;"
-                    "font-size:2.5rem!important;line-height:1.15!important;"
-                    "margin:0!important; white-space:pre-line!important;"
-                    "padding:0.4rem 0!important;"
-                    "letter-spacing:-0.03em!important;"
-                    "display:flex!important;flex-direction:column!important;"
-                    "align-items:center!important;justify-content:flex-start!important;"
-                    "transition:transform 0.15s, opacity 0.15s!important;}"
-                    "div[data-testid='stHorizontalBlock']:has(.tile-row-1)"
-                    " div[data-testid='stColumn'] button{"
-                    "font-size:2rem!important;}"
-                    "div[data-testid='stHorizontalBlock']:has([class*='tile-row'])"
-                    " div[data-testid='stColumn'] button:hover{"
-                    "transform:translateY(-2px)!important; opacity:0.8!important;}"
-                )
-
-                for row_idx, row in enumerate(rows_cfg):
-                    for col_idx, (key, num, bg, ba) in enumerate(row):
-                        is_act = (act == key)
-                        _color = num if is_act else 'rgba(255,255,255,0.6)'
-                        css += (
-                            # anchor id = tile-r0 or tile-r1, scoped by row
-                            "div[data-testid='stHorizontalBlock']:has(.tile-row-" + str(row_idx) + ")"
-                            " div[data-testid='stColumn']:nth-child(" + str(col_idx+1) + ") button{"
-                            "color:" + _color + "!important;}"
-                        )
-                # basic mode (1 row only, 3 tiles)
-                for col_idx, (key, num, bg, ba) in enumerate(basic_cfg[0]):
-                    is_act = (act == key)
-                    _color = num if is_act else 'rgba(255,255,255,0.6)'
-                    css += (
-                        "div[data-testid='stHorizontalBlock']:has(.tile-row-basic)"
-                        " div[data-testid='stColumn']:nth-child(" + str(col_idx+1) + ") button{"
-                        "color:" + _color + "!important;}"
-                    )
-                css += "</style>"
-                return css
-
-            st.markdown(tile_css(active, TILE_CFG, TILE_COUNTS), unsafe_allow_html=True)
-
-            def render_tile_row(keys, row_class, col_widths=None):
-                # Inject class marker inside the row so :has() can scope the CSS
-                # We put it as the FIRST element inside the first column
-                widths = col_widths if col_widths else len(keys)
-                cols = st.columns(widths)
-                for i, (col, key) in enumerate(zip(cols, keys)):
-                    cfg    = TILE_CFG[key]
-                    is_act = (active == key)
-                    cnt_v  = str(TILE_COUNTS[key])
-                    lbl    = cfg['label']
-                    arrow  = '\u25b6  ' if is_act else ''
-                    btn_lbl = cnt_v + '\n' + arrow + lbl.upper()
-                    with col:
-                        if i == 0:
-                            # Marker span in first col — CSS :has(.tile-row-N) scopes the whole row
-                            st.markdown(
-                                '<span class="' + row_class + '" style="display:none;"></span>',
-                                unsafe_allow_html=True
-                            )
-                        if st.button(btn_lbl, key='tile_' + key,
-                                     use_container_width=True,
-                                     help='Filter: ' + lbl):
-                            st.session_state['scanner_filter'] = 'All' if is_act else key
-                            st.rerun()
-
+            # ─── Simple Native Radio Filter ───
             if analysis_method == 'cluster':
-                render_tile_row(['All', 'Cluster', 'Strong'], 'tile-row-0', col_widths=[2, 1, 1])
-                st.markdown('<div style="height:0.4rem;"></div>', unsafe_allow_html=True)
-                render_tile_row(['Bullish', 'Bearish', 'Breakout', 'Breakdown'], 'tile-row-1', col_widths=[1, 1, 1, 1])
+                options = ['All', 'Cluster', 'Strong', 'Bullish', 'Bearish', 'Breakout', 'Breakdown']
             else:
-                render_tile_row(['All', 'Bullish', 'Bearish'], 'tile-row-basic', col_widths=[1, 1, 1])
+                options = ['All', 'Bullish', 'Bearish']
+
+            # Create display labels with counts
+            format_func = lambda x: f"{x} ({TILE_COUNTS[x]})"
+            
+            # Show a cleaner warning/info box acting as top spacing
+            st.markdown('<div style="height:0.5rem;"></div>', unsafe_allow_html=True)
+            
+            selected_filter = st.radio(
+                "Filter Results By Category",
+                options=options,
+                format_func=format_func,
+                index=options.index(active) if active in options else 0,
+                horizontal=True,
+                key='scanner_radio_filter'
+            )
+            
+            if selected_filter != active:
+                st.session_state['scanner_filter'] = selected_filter
+                st.rerun()
+
+            # The st.radio component above completely replaces the custom tiles.
 
             st.markdown(
                 '<div style="margin:0.8rem 0 0.4rem;'
