@@ -354,6 +354,79 @@ def fetch_daily_breakout_data(symbols, progress_bar=None):
 
 
 # ---------------------------------------------------------------------------
+# Fibonacci Level Scanner
+# ---------------------------------------------------------------------------
+
+FIB_LEVELS = [
+    1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987,
+    1597, 2584, 4181, 6765, 10946, 17711, 28657, 46368, 75025, 121393
+]
+
+def find_nearest_fib(price):
+    """Return (nearest_fib, pct_distance) for a given price."""
+    nearest  = min(FIB_LEVELS, key=lambda f: abs(f - price))
+    dist_pct = abs(price - nearest) / nearest * 100
+    return nearest, round(dist_pct, 2)
+
+def scan_fibonacci_levels(symbols, tolerance_pct=1.5, progress_bar=None):
+    """
+    Return stocks whose current price is within tolerance_pct% of any
+    Fibonacci number in FIB_LEVELS, sorted by proximity.
+    """
+    results = []
+    total   = len(symbols)
+
+    for i, symbol in enumerate(symbols):
+        if progress_bar:
+            progress_bar.progress(
+                (i + 1) / total,
+                text=f"Fib scan: {symbol.replace('.NS','')}  ({i+1}/{total})"
+            )
+        try:
+            hist = yf.Ticker(symbol).history(period="2d", interval="1d")
+            if hist is None or len(hist) == 0:
+                continue
+
+            ltp        = float(hist['Close'].iloc[-1])
+            prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else ltp
+            chng_pct   = round((ltp - prev_close) / prev_close * 100, 2) if prev_close else 0
+
+            nearest_fib, dist_pct = find_nearest_fib(ltp)
+            if dist_pct > tolerance_pct:
+                continue
+
+            below = [f for f in FIB_LEVELS if f <= ltp]
+            above = [f for f in FIB_LEVELS if f >  ltp]
+            fib_sup = max(below) if below else FIB_LEVELS[0]
+            fib_res = min(above) if above else FIB_LEVELS[-1]
+
+            if dist_pct <= 0.5:
+                zone = "🎯 Exactly At Fib"
+            elif ltp < nearest_fib:
+                zone = "⬆️ Approaching"
+            else:
+                zone = "⬇️ Just Above"
+
+            results.append({
+                'Stock':          symbol.replace('.NS', ''),
+                'LTP':            round(ltp, 2),
+                'Nearest Fib':    nearest_fib,
+                'Distance %':     dist_pct,
+                'Zone':           zone,
+                'Fib Support':    fib_sup,
+                'Fib Resistance': fib_res,
+                'Change %':       chng_pct,
+            })
+        except Exception:
+            continue
+
+    if not results:
+        return pd.DataFrame()
+    df = pd.DataFrame(results)
+    return df.sort_values('Distance %').reset_index(drop=True)
+
+
+# ---------------------------------------------------------------------------
 # Monthly Marubozu scanners
 # ---------------------------------------------------------------------------
 
@@ -529,10 +602,29 @@ def display_scanner_page():
         display: flex; align-items: center; gap: 0.5rem;
     }
 
-    /* ── Universe radio (simple, no box) ── */
-    div[data-testid="stSidebar"] div[data-testid="stRadio"].universe-radio label {
+    /* ── Universe list item buttons ── */
+    .univ-wrap { margin: 2px 0; }
+    .univ-wrap button {
+        background: transparent !important;
+        border: none !important;
+        border-radius: 10px !important;
+        color: #8099bb !important;
         font-size: 0.92rem !important;
-        padding: 0.35rem 0.2rem !important;
+        font-weight: 500 !important;
+        padding: 0.62rem 0.9rem !important;
+        text-align: left !important;
+        width: 100% !important;
+        justify-content: flex-start !important;
+        transition: background 0.15s, color 0.15s !important;
+    }
+    .univ-wrap button:hover {
+        background: rgba(255,255,255,0.07) !important;
+        color: #ddeeff !important;
+    }
+    .univ-active button {
+        background: rgba(30,60,120,0.55) !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
     }
 
     /* ── Divider ── */
@@ -541,43 +633,35 @@ def display_scanner_page():
         margin: 0.3rem 0;
     }
 
-    /* ── Radio — all sidebar radios ── */
+    /* ── Radio — scanner type ── */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] {
         gap: 0 !important;
     }
-    /* Unselected label — dimmed but readable */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label {
-        font-size: 0.92rem !important;
-        color: #6a80a0 !important;
-        padding: 0.45rem 0.4rem !important;
-        border-radius: 8px !important;
+        font-size: 0.91rem !important;
+        color: #7a90b5 !important;
+        padding: 0.45rem 0.3rem !important;
         cursor: pointer !important;
-        transition: background 0.15s, color 0.15s !important;
+        transition: color 0.15s !important;
         align-items: center !important;
     }
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover {
-        color: #c8dcf8 !important;
-        background: rgba(255,255,255,0.05) !important;
+        color: #d0e4ff !important;
     }
-    /* Selected label — bright white with highlight */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) {
         color: #ffffff !important;
-        font-weight: 700 !important;
-        background: rgba(59,130,246,0.15) !important;
-        border-radius: 8px !important;
+        font-weight: 600 !important;
     }
-    /* Radio circle — unselected */
+    /* Radio circle */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child {
-        border-color: #3a5070 !important;
+        border-color: #2d4060 !important;
         background: transparent !important;
-        width: 16px !important; height: 16px !important;
+        width: 17px !important; height: 17px !important;
         flex-shrink: 0 !important;
     }
-    /* Radio circle — selected: bright red dot */
     div[data-testid="stSidebar"] div[data-testid="stRadio"] [aria-checked="true"] > div:first-child {
-        background: #ff4444 !important;
-        border-color: #ff4444 !important;
-        box-shadow: 0 0 6px rgba(255,68,68,0.6) !important;
+        background: #e05252 !important;
+        border-color: #e05252 !important;
     }
 
     /* ── File uploader ── */
@@ -598,33 +682,43 @@ def display_scanner_page():
 
     /* ── Run Analysis button ── */
     div[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="primary"]) button {
-        background: linear-gradient(135deg, #ff4444 0%, #e02020 100%) !important;
+        background: linear-gradient(135deg,#e53e3e 0%,#c53030 100%) !important;
         border: none !important; color: #fff !important;
         font-size: 1rem !important; font-weight: 800 !important;
-        letter-spacing: 0.08em !important; text-transform: uppercase !important;
+        letter-spacing: 0.07em !important; text-transform: uppercase !important;
         border-radius: 12px !important; height: 54px !important;
-        box-shadow: 0 4px 28px rgba(255,60,60,0.55) !important;
+        box-shadow: 0 4px 22px rgba(229,62,62,0.4) !important;
         transition: box-shadow 0.2s, transform 0.15s !important;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.3) !important;
     }
     div[data-testid="stSidebar"] [data-testid="stButton"]:has(button[kind="primary"]) button:hover {
-        box-shadow: 0 8px 36px rgba(255,60,60,0.75) !important;
+        box-shadow: 0 8px 32px rgba(229,62,62,0.65) !important;
         transform: translateY(-2px) !important;
-        background: linear-gradient(135deg, #ff5555 0%, #e53030 100%) !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
     # ── Init state ──
-    # ── Stock Universe — simple radio ──
+    if 'scanner_universe' not in st.session_state:
+        st.session_state['scanner_universe'] = 'Nifty 500'
+
+    stock_universe = st.session_state['scanner_universe']
+    nifty_active   = stock_universe == 'Nifty 500'
+    fo_active      = stock_universe == 'F&O Stocks'
+
+    # ── Stock Universe ──
     st.sidebar.markdown('<div class="sc-section">📂 &nbsp;Stock Universe</div>', unsafe_allow_html=True)
-    stock_universe = st.sidebar.radio(
-        "Stock Universe",
-        ["Nifty 500", "F&O Stocks"],
-        index=0 if st.session_state.get('scanner_universe', 'Nifty 500') == 'Nifty 500' else 1,
-        label_visibility="collapsed",
-        key="scanner_universe"
-    )
+    with st.sidebar:
+        st.markdown(f'<div class="univ-wrap {("univ-active" if nifty_active else "")}">', unsafe_allow_html=True)
+        if st.button("🗃️   Nifty 500", key="btn_nifty", use_container_width=True):
+            st.session_state['scanner_universe'] = 'Nifty 500'
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown(f'<div class="univ-wrap {("univ-active" if fo_active else "")}">', unsafe_allow_html=True)
+        if st.button("📊   F&O Stocks", key="btn_fo", use_container_width=True):
+            st.session_state['scanner_universe'] = 'F&O Stocks'
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.sidebar.markdown('<hr class="sc-divider">', unsafe_allow_html=True)
 
@@ -635,10 +729,21 @@ def display_scanner_page():
         ["Current Signals",
          "Current Signals with Cluster Analysis",
          "Daily Breakout Tracking",
-         "Monthly Marubozu Open Scan"],
+         "Monthly Marubozu Open Scan",
+         "Fibonacci Level Scan"],
         label_visibility="collapsed",
         key="scanner_type"
     )
+
+    # Tolerance slider — only shown for Fib scan
+    fib_tolerance = 1.5
+    if analysis_type == "Fibonacci Level Scan":
+        fib_tolerance = st.sidebar.slider(
+            "📐 Proximity Tolerance (%)",
+            min_value=0.5, max_value=5.0, value=1.5, step=0.25,
+            help="Max % distance from a Fibonacci number to qualify",
+            key="fib_tolerance"
+        )
 
     st.sidebar.markdown('<hr class="sc-divider">', unsafe_allow_html=True)
 
@@ -731,6 +836,19 @@ def display_scanner_page():
         st.session_state.pop('scanner_df', None)
         from datetime import datetime as _dt
         st.session_state['last_run_time'] = _dt.now().strftime('%b %d  %H:%M')
+
+        # ===== Fibonacci Level Scan =====
+        if analysis_type == "Fibonacci Level Scan":
+            progress_bar = st.progress(0, text="Scanning Fibonacci levels...")
+            df_fib = scan_fibonacci_levels(symbols, fib_tolerance, progress_bar)
+            progress_bar.empty()
+            if not df_fib.empty:
+                st.session_state['scanner_fib_df']  = df_fib
+                st.session_state['fib_tolerance_used'] = fib_tolerance
+            else:
+                st.session_state.pop('scanner_fib_df', None)
+                st.warning(f"No stocks found within ±{fib_tolerance}% of any Fibonacci level.")
+            # fall through to display
 
         # ===== Monthly Marubozu Open Scan =====
         if analysis_type == "Monthly Marubozu Open Scan":
@@ -1071,6 +1189,85 @@ def display_scanner_page():
 
     elif analysis_type in ["Current Signals", "Current Signals with Cluster Analysis"]:
         st.info("\U0001f448 Click **Run Analysis** in the sidebar to start scanning.")
+
+    # ── Fibonacci Level display ──────────────────────────────────────────────
+    if 'scanner_fib_df' in st.session_state and analysis_type == "Fibonacci Level Scan":
+        df_fib = st.session_state['scanner_fib_df']
+        tol    = st.session_state.get('fib_tolerance_used', 1.5)
+        if not df_fib.empty:
+            total_hits  = len(df_fib)
+            exact_hits  = len(df_fib[df_fib['Distance %'] <= 0.5])
+            approaching = len(df_fib[df_fib['Zone'].str.contains('Approaching', na=False)])
+            just_above  = len(df_fib[df_fib['Zone'].str.contains('Just Above',  na=False)])
+
+            c1, c2, c3, c4 = st.columns(4)
+            for col, label, val, clr in [
+                (c1, "Total Near Fib",  total_hits,  "#38bdf8"),
+                (c2, "Exactly At Fib",  exact_hits,  "#34d399"),
+                (c3, "Approaching Fib", approaching, "#fbbf24"),
+                (c4, "Just Above Fib",  just_above,  "#f87171"),
+            ]:
+                col.markdown(
+                    f'<div style="background:#0a1628;border:1.5px solid {clr}44;'
+                    f'border-radius:12px;padding:0.9rem;text-align:center;margin-bottom:0.6rem;">'
+                    f'<div style="font-size:2rem;font-weight:900;color:{clr};">{val}</div>'
+                    f'<div style="font-size:0.65rem;color:rgba(255,255,255,0.4);'
+                    f'text-transform:uppercase;letter-spacing:0.1em;margin-top:0.2rem;">{label}</div>'
+                    f'</div>', unsafe_allow_html=True
+                )
+
+            # Info bar
+            st.markdown(
+                f'<div style="background:#0d1628;border:1px solid rgba(59,130,246,0.2);'
+                f'border-radius:10px;padding:0.55rem 1.1rem;margin:0.4rem 0 0.8rem;'
+                f'font-size:0.82rem;color:#7a9fc4;">'
+                f'📐 <b>Tolerance:</b> ±{tol}% &nbsp;|&nbsp; '
+                f'🔢 <b>Fib levels checked:</b> 1 → 121,393 &nbsp;|&nbsp; '
+                f'📊 <b>Sorted by:</b> proximity to nearest Fib</div>',
+                unsafe_allow_html=True
+            )
+
+            # Fib level tags — which levels have most hits
+            fib_counts = df_fib.groupby('Nearest Fib').size().reset_index(name='n')
+            fib_counts = fib_counts.sort_values('n', ascending=False).head(8)
+            tags = " ".join([
+                f'<span style="background:rgba(56,189,248,0.12);color:#38bdf8;'
+                f'border-radius:6px;padding:0.15rem 0.55rem;font-size:0.78rem;margin:2px;">'
+                f'<b>{r["n"]}</b> × ₹{r["Nearest Fib"]}</span>'
+                for _, r in fib_counts.iterrows()
+            ])
+            st.markdown(f'<div style="margin-bottom:0.8rem;">{tags}</div>',
+                        unsafe_allow_html=True)
+
+            # Search
+            fib_q = st.text_input("", placeholder="🔍  Search stock...",
+                                  key="fib_search", label_visibility="collapsed")
+            df_show = (df_fib[df_fib['Stock'].str.contains(fib_q.upper(), na=False)]
+                       if fib_q else df_fib)
+
+            # Colour helpers
+            def _dist_color(v):
+                if v <= 0.5:  return 'color:#34d399;font-weight:700'
+                if v <= 1.0:  return 'color:#fbbf24;font-weight:600'
+                return 'color:#f87171'
+
+            def _chg_color(v):
+                return 'color:#34d399' if v > 0 else ('color:#f87171' if v < 0 else '')
+
+            styled = (df_show.style
+                      .applymap(_dist_color, subset=['Distance %'])
+                      .applymap(_chg_color,  subset=['Change %']))
+            st.dataframe(styled, use_container_width=True, hide_index=True)
+
+            st.markdown(
+                create_download_link(
+                    df_fib,
+                    f"fib_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+                ),
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("No stocks matched the Fibonacci criteria.")
 
     # ── Daily Breakout display ───────────────────────────────────────────────
     if 'scanner_daily_df' in st.session_state and analysis_type in ["Daily Breakout Tracking"]:
