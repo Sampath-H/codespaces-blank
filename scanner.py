@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import io
 import base64
 import os
+import plotly.graph_objects as go
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +364,7 @@ FIB_LEVELS = [
 ]
 
 # Retracement ratios to check between consecutive Fib numbers
-FIB_RATIOS = [0.236, 0.382, 0.500, 0.618, 0.786]
+FIB_RATIOS = [0.236, 0.618, 0.786]
 
 def _pct(price, level):
     """% distance between price and a level."""
@@ -394,7 +395,7 @@ def scan_fibonacci_levels(symbols, tolerance_pct=1.5, progress_bar=None):
 
             ltp        = float(hist['Close'].iloc[-1])
             prev_close = float(hist['Close'].iloc[-2]) if len(hist) >= 2 else ltp
-            chng_pct   = round((ltp - prev_close) / prev_close * 100, 2) if prev_close else 0
+            chng_pct   = round((ltp - prev_close) / prev_close * 100, 2) if prev_close else 0.0
 
             # ── 1. Nearest absolute Fib number ──────────────────────────────
             nearest_fib = min(FIB_LEVELS, key=lambda f: abs(f - ltp))
@@ -430,12 +431,10 @@ def scan_fibonacci_levels(symbols, tolerance_pct=1.5, progress_bar=None):
             row = {
                 'Stock':      symbol.replace('.NS', ''),
                 'LTP':        f"{ltp:.2f}",
-                'Change %':   chng_pct,
+                'Change %':   f"{chng_pct:.2f}",
                 'Near Fib #': f"{nearest_fib}  ({dist_fib:.2f}%)" if near_fib else "-",
                 'Fib Range':  f"{fib_low} → {fib_high}",
                 '0.236':      fmt_ret(0.236),
-                '0.382':      fmt_ret(0.382),
-                '0.500':      fmt_ret(0.500),
                 '0.618':      fmt_ret(0.618),
                 '0.786':      fmt_ret(0.786),
                 # internal sort key
@@ -589,6 +588,83 @@ def scan_monthly_red_open(symbols):
 # ---------------------------------------------------------------------------
 # Scanner page UI
 # ---------------------------------------------------------------------------
+
+
+def _draw_fib_chart(symbol, fib_low, fib_high, period="3mo"):
+    """
+    Fetch OHLC for symbol and return a plotly figure with:
+      - Dark candlestick chart
+      - Horizontal lines for fib_low (0), fib_high (1)
+      - Retracement levels 0.236, 0.618, 0.786
+      - Absolute nearest Fib line
+    """
+    try:
+        df = yf.download(f"{symbol}.NS", period=period, interval="1d",
+                         auto_adjust=True, progress=False)
+        if df is None or len(df) == 0:
+            return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = [c[0] for c in df.columns]
+        df = df.reset_index()
+
+        rng = fib_high - fib_low
+        ret_levels = {
+            "0 (Fib Low)":  (fib_low,                  "#6b7280", "dot"),
+            "0.236":         (round(fib_low + 0.236*rng, 2), "#fbbf24", "dash"),
+            "0.618":         (round(fib_low + 0.618*rng, 2), "#fb923c", "dash"),
+            "0.786":         (round(fib_low + 0.786*rng, 2), "#f87171", "dash"),
+            "1 (Fib High)": (fib_high,                  "#6b7280", "dot"),
+        }
+
+        fig = go.Figure()
+
+        # Candlesticks
+        fig.add_trace(go.Candlestick(
+            x=df['Date'],
+            open=df['Open'], high=df['High'],
+            low=df['Low'],   close=df['Close'],
+            increasing_line_color='#34d399',
+            decreasing_line_color='#f87171',
+            name=symbol,
+            showlegend=False,
+        ))
+
+        # Fib horizontal lines
+        for label, (level, color, dash) in ret_levels.items():
+            fig.add_hline(
+                y=level,
+                line=dict(color=color, width=1.5, dash=dash),
+                annotation_text=f" {label}  ₹{level}",
+                annotation_position="right",
+                annotation_font=dict(color=color, size=11),
+            )
+
+        fig.update_layout(
+            paper_bgcolor="#070d1a",
+            plot_bgcolor="#070d1a",
+            font=dict(color="#a0b4c8", family="DM Sans"),
+            xaxis=dict(
+                gridcolor="rgba(255,255,255,0.05)",
+                showgrid=True,
+                rangeslider=dict(visible=False),
+                type="date",
+            ),
+            yaxis=dict(
+                gridcolor="rgba(255,255,255,0.05)",
+                showgrid=True,
+                side="right",
+            ),
+            margin=dict(l=10, r=120, t=40, b=10),
+            height=450,
+            title=dict(
+                text=f"<b>{symbol}</b> — Fibonacci Levels",
+                font=dict(color="#ffffff", size=15),
+                x=0.02,
+            ),
+        )
+        return fig
+    except Exception as e:
+        return None
 
 def display_scanner_page():
     """Main scanner page UI — full-featured port from trade.py."""
@@ -1232,13 +1308,12 @@ def display_scanner_page():
             n_618   = _has_hit('0.618')
             n_786   = _has_hit('0.786')
 
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4 = st.columns(4)
             for col, label, val, clr in [
                 (c1, "Total Stocks",   total_hits, "#38bdf8"),
                 (c2, "Near Fib #",     n_fib,      "#34d399"),
                 (c3, "Near 0.236",     n_236,      "#fbbf24"),
-                (c4, "Near 0.618",     n_618,      "#fb923c"),
-                (c5, "Near 0.786",     n_786,      "#f87171"),
+                (c4, "Near 0.618/0.786", n_618+n_786, "#f87171"),
             ]:
                 col.markdown(
                     f'<div style="background:#0a1628;border:1.5px solid {clr}44;'
@@ -1256,7 +1331,7 @@ def display_scanner_page():
                 f'font-size:0.82rem;color:#7a9fc4;">'
                 f'📐 <b>Tolerance:</b> ±{tol}% &nbsp;|&nbsp; '
                 f'🔢 <b>Fib Numbers:</b> 1→121393 &nbsp;|&nbsp; '
-                f'📊 <b>Retracement:</b> 0.236 / 0.382 / 0.500 / 0.618 / 0.786 between bracket Fibs &nbsp;|&nbsp; '
+                f'📊 <b>Retracement levels:</b> 0.236 / 0.618 / 0.786 between bracket Fibs &nbsp;|&nbsp; '
                 f'📈 <b>Sorted by closest hit</b></div>',
                 unsafe_allow_html=True
             )
@@ -1271,7 +1346,7 @@ def display_scanner_page():
             <div style="margin-top:0.5rem;font-size:0.8rem;color:#a0b4c8;line-height:1.9;">
             <b>Fib Range</b> — Two consecutive Fibonacci numbers that bracket the stock price (low → high)<br>
             <b>Near Fib #</b> — Price is close to an absolute Fibonacci number. Shows: <i>fib_value (dist%)</i><br>
-            <b>0.236 / 0.382 / 0.500 / 0.618 / 0.786</b> — Retracement levels between the two bracket Fibs.<br>
+            <b>0.236 / 0.618 / 0.786</b> — Retracement levels between the two bracket Fibs.<br>
             &nbsp;&nbsp;&nbsp;Calculated as: <i>fib_low + ratio × (fib_high − fib_low)</i><br>
             &nbsp;&nbsp;&nbsp;Shows: <i>price_level (dist%)</i> if price is near that level, else <b>—</b>
             </div></details>
@@ -1296,7 +1371,7 @@ def display_scanner_page():
                 except Exception:
                     return ''
 
-            ret_cols = ['Near Fib #', '0.236', '0.382', '0.500', '0.618', '0.786']
+            ret_cols = ['Near Fib #', '0.236', '0.618', '0.786']
             styled = df_show.style
             for rc in ret_cols:
                 if rc in df_show.columns:
@@ -1305,6 +1380,50 @@ def display_scanner_page():
                 styled = styled.applymap(_chg_color, subset=['Change %'])
 
             st.dataframe(styled, use_container_width=True, hide_index=True)
+
+            # ── Per-stock chart viewer ────────────────────────────────────
+            st.markdown(
+                '<div style="font-size:0.78rem;color:#5a7a9a;margin:0.5rem 0 0.3rem;">'
+                '📈 Click any stock below to view its chart with Fibonacci levels</div>',
+                unsafe_allow_html=True
+            )
+
+            # Period selector
+            chart_period = st.select_slider(
+                "Chart period", options=["1mo", "3mo", "6mo", "1y"],
+                value="3mo", key="fib_chart_period", label_visibility="collapsed"
+            )
+
+            # Stock selector buttons — up to 8 per row
+            stocks_list = df_show['Stock'].tolist()
+            btn_cols = st.columns(min(len(stocks_list), 8))
+            for idx_b, stk in enumerate(stocks_list[:8]):
+                if btn_cols[idx_b % 8].button(stk, key=f"fib_btn_{stk}", use_container_width=True):
+                    st.session_state['fib_chart_stock'] = stk
+            if len(stocks_list) > 8:
+                btn_cols2 = st.columns(min(len(stocks_list)-8, 8))
+                for idx_b, stk in enumerate(stocks_list[8:16]):
+                    if btn_cols2[idx_b % 8].button(stk, key=f"fib_btn_{stk}", use_container_width=True):
+                        st.session_state['fib_chart_stock'] = stk
+
+            # Draw chart for selected stock
+            sel = st.session_state.get('fib_chart_stock')
+            if sel and sel in df_show['Stock'].values:
+                row = df_show[df_show['Stock'] == sel].iloc[0]
+                # Parse fib_low / fib_high from "Fib Range" col e.g. "377 → 610"
+                try:
+                    parts = str(row['Fib Range']).split('→')
+                    f_low  = float(parts[0].strip())
+                    f_high = float(parts[1].strip())
+                except Exception:
+                    f_low, f_high = 0, 1
+
+                with st.spinner(f"Loading chart for {sel}..."):
+                    fig = _draw_fib_chart(sel, f_low, f_high, chart_period)
+                if fig:
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning(f"Could not load chart for {sel}.")
 
             st.markdown(
                 create_download_link(
