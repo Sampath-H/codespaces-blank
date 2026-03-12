@@ -680,44 +680,15 @@ def main():
         font-family: 'DM Sans', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
 
-    /* ─── Sidebar Toggle Button Font Fix (User requested test) ─── */
-    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded');
-
-    /* Force font to Material Symbols */
-    [data-testid="collapsedControl"] span,
-    [data-testid="collapsedControl"] span span,
-    [data-testid="collapsedControl"] button span,
-    [data-testid="stSidebarCollapse"] span,
-    [data-testid="stSidebarCollapse"] span span,
-    [data-testid="stSidebarCollapseButton"] span,
-    [data-testid="stSidebarCollapseButton"] span span,
-    [data-testid="stSidebarCollapseButton"] button span,
-    header[data-testid="stHeader"] button span,
-    .material-symbols-rounded {
-        font-family: 'Material Symbols Rounded' !important;
-    }
-
-    /* Fallback: constrain button size and hide overflowing text */
-    [data-testid="collapsedControl"],
-    [data-testid="collapsedControl"] button,
-    [data-testid="stSidebarCollapseButton"],
-    [data-testid="stSidebarCollapseButton"] button,
-    header[data-testid="stHeader"] button {
-        font-size: 0 !important;
-        color: transparent !important;
-        overflow: hidden !important;
-        width: 2rem !important;
-        height: 2rem !important;
-    }
-    
-    [data-testid="collapsedControl"] span,
-    [data-testid="collapsedControl"] button span,
-    [data-testid="stSidebarCollapseButton"] span,
-    [data-testid="stSidebarCollapseButton"] button span,
-    header[data-testid="stHeader"] button span {
-        font-size: 1.5rem !important;
-        color: white !important;
-    }
+    /* ─── Completely hide sidebar toggle buttons ─── */
+    /* Old Streamlit (<1.38) test IDs */
+    [data-testid="collapsedControl"] { display: none !important; }
+    [data-testid="stSidebarCollapse"] { display: none !important; }
+    /* New Streamlit (>=1.38) test IDs */
+    [data-testid="stSidebarCollapseButton"] { display: none !important; }
+    button[kind="header"] { display: none !important; }
+    header[data-testid="stHeader"] { display: none !important; }
+    .stAppHeader { display: none !important; }
 
     /* ─── App background ─────────────────────────── */
     .stApp { background: #070d1a !important; }
@@ -745,42 +716,75 @@ def main():
         background: rgba(255,255,255,0.06) !important;
         color: #c8d8f0 !important;
     }
+    /* Selected nav item — bright white */
     section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) {
-        background: rgba(59,130,246,0.14) !important;
+        background: rgba(59,130,246,0.18) !important;
         color: #ffffff !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
     }
-    /* Hide the radio circle for nav items */
+    /* Hide the radio circle for nav items only (first radio = nav) */
     section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div:first-child {
         display: none !important;
     }
-    /* Radio circles inside scanner sidebar (not nav) */
-    section[data-testid="stSidebar"] div[data-testid="stRadio"][data-scanner="1"] label > div:first-child {
+
+    /* ─── Scanner sidebar radios — show circles, bright selection ── */
+    /* Stock Universe radio */
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(2) label,
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(3) label {
+        color: #8a9fbe !important;
+        padding: 0.42rem 0.5rem !important;
+        font-size: 0.91rem !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(2) label > div:first-child,
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(3) label > div:first-child {
         display: flex !important;
+        width: 16px !important; height: 16px !important;
+        flex-shrink: 0 !important;
+        border-color: #3a5070 !important;
+        background: transparent !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(2) label:has(input:checked),
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(3) label:has(input:checked) {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        background: transparent !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(2) [aria-checked="true"] > div:first-child,
+    section[data-testid="stSidebar"] div[data-testid="stRadio"]:nth-of-type(3) [aria-checked="true"] > div:first-child {
+        background: #ff4444 !important;
+        border-color: #ff4444 !important;
+        box-shadow: 0 0 8px rgba(255,68,68,0.7) !important;
     }
 
-    /* ─── Sidebar run button ──────────────────────── */
+    /* ─── Sidebar buttons ─────────────────────────── */
+    /* Run Analysis — bright red */
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button {
-        background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+        background: linear-gradient(135deg, #ff3b3b 0%, #d91c1c 100%) !important;
         color: #fff !important;
         border: none !important;
-        border-radius: 10px !important;
-        font-weight: 700 !important;
-        font-size: 0.9rem !important;
-        padding: 0.6rem !important;
-        box-shadow: 0 4px 16px rgba(220,38,38,0.4) !important;
+        border-radius: 12px !important;
+        font-weight: 800 !important;
+        font-size: 0.97rem !important;
+        letter-spacing: 0.06em !important;
+        height: 52px !important;
+        box-shadow: 0 4px 24px rgba(255,50,50,0.55) !important;
         transition: transform 0.15s, box-shadow 0.15s !important;
     }
     section[data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {
         transform: translateY(-2px) !important;
-        box-shadow: 0 8px 24px rgba(220,38,38,0.5) !important;
+        box-shadow: 0 8px 32px rgba(255,50,50,0.75) !important;
+        background: linear-gradient(135deg, #ff5555 0%, #e52020 100%) !important;
     }
-    /* Logout button — last button in sidebar */
+    /* Logout button — ghost style */
     section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button {
         background: rgba(255,255,255,0.05) !important;
         color: #aab !important;
         border: 1px solid rgba(255,255,255,0.1) !important;
         box-shadow: none !important;
+        height: auto !important;
+        font-weight: 500 !important;
+        font-size: 0.88rem !important;
+        letter-spacing: 0 !important;
     }
     section[data-testid="stSidebar"] div[data-testid="stButton"]:last-of-type > button:hover {
         background: rgba(220,38,38,0.15) !important;
